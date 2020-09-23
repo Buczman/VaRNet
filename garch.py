@@ -3,82 +3,96 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats
-from tensorflow.keras.constraints import non_neg
+import torch
 
 data = pd.read_csv('./data/wig.csv').set_index('Data')
 data['log_returns'] = data['Zamkniecie'].rolling(2).apply(lambda x: np.log(x[1]/x[0]), raw=True)
 
 
 dataset = data.loc[(data.index > '2005-01-01')]
-dataset = dataset.iloc[1:501]
+dataset2 = dataset.iloc[1:501]
+
+history_size = 30
 
 def univariate_data(dataset, start_index, end_index, history_size, target_size):
-    data = []
-    labels = []
 
     start_index = start_index + history_size
     if end_index is None:
         end_index = len(dataset) - target_size
 
     for i in range(start_index, end_index):
+        variance = np.zeros((history_size, 1))
         indices = range(i-history_size, i)
+        variance[-1, :] = np.var(dataset[indices])
+        X_train = np.reshape(dataset[indices], (history_size, 1))
+        X_train = np.concatenate((X_train, variance), axis=1)
         # Reshape data from (history_size,) to (history_size, 1)
-        data.append(np.reshape(dataset[indices], (history_size, 1)))
-        labels.append(dataset[i+target_size])
-    return np.array(data), np.array(labels)
+        yield X_train, np.array(dataset[i+target_size])
 
 
-@tf.function
 def garch_loss(true, vol):
-    return 1 / 2 * (tf.math.log(vol) + true ** 2 / vol)  #    + tf.math.log(2 * tf.constant(np.pi))
+    return 1 / 2 * (torch.log(vol) + true ** 2 / vol)  #    + tf.math.log(2 * tf.constant(np.pi))
 
 
-model = tf.keras.Sequential([
-    tf.keras.layers.Input(shape=(30, 1)),
-    tf.keras.layers.LSTM(64, stateful=False),
-    tf.keras.layers.Dense(1, activation='sigmoid')
-])
-model.compile(optimizer='adam', loss=garch_loss)  # tf.keras.losses.MSE
+class LSTM(torch.nn.Module):
+    def __init__(self, input_size=2, hidden_layer_size=100, output_size=1):
+        super().__init__()
+        self.hidden_layer_size = hidden_layer_size
+
+        self.lstm = torch.nn.LSTM(input_size, hidden_layer_size)
+
+        self.linear = torch.nn.Linear(hidden_layer_size, output_size)
+
+        self.hidden_cell = (torch.zeros(1,1,self.hidden_layer_size),
+                            torch.zeros(1,1,self.hidden_layer_size))
+        self.sigmoid = torch.nn.Sigmoid()
+
+    def forward(self, input_seq):
+        lstm_out, self.hidden_cell = self.lstm(input_seq.view(len(input_seq) ,1, -1), self.hidden_cell)
+        predictions = self.sigmoid(self.linear(lstm_out.view(len(input_seq), -1)))
+        return predictions[-1]
+
+model = LSTM()
+loss_function = garch_loss
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 
-def reset_weights(model):
-    for layer in model.layers:
-        if isinstance(layer, tf.keras.Model): #if you're using a model as a layer
-            reset_weights(layer) #apply function recursively
-            continue
 
-        #where are the initializers?
-        if hasattr(layer, 'cell'):
-            init_container = layer.cell
+
+epochs = 15
+
+
+list_of_outputs = []
+
+for i in range(epochs):
+    for seq, labels in univariate_data(dataset2.log_returns.to_numpy(), 0, None, 30, 0):
+        optimizer.zero_grad()
+        model.hidden_cell = (torch.zeros(1, 1, model.hidden_layer_size),
+                        torch.zeros(1, 1, model.hidden_layer_size))
+
+        if len(list_of_outputs) < history_size:
+            seq[history_size - len(list_of_outputs):history_size, 1] = list_of_outputs
+            X_train = torch.tensor(np.expand_dims(seq, axis=1)).float()
+            y_pred = model(X_train)
+            list_of_outputs.append(y_pred.data.numpy()[0])
         else:
-            init_container = layer
+            X_train = torch.tensor(np.expand_dims(seq, axis = 1)).float()
+            y_pred = model(X_train)
+            del list_of_outputs[0]
+            list_of_outputs.append(y_pred.data.numpy()[0])
+        single_loss = loss_function(torch.tensor(labels).float(), y_pred)
+        single_loss.backward()
+        optimizer.step()
 
-        for key, initializer in init_container.__dict__.items():
-            if "initializer" not in key: #is this item an initializer?
-                  continue #if no, skip it
+    print(f'epoch: {i:3} loss: {single_loss.tolist()[0]:10.8f}')
 
-            # find the corresponding variable, like the kernel or the bias
-            if key == 'recurrent_initializer': #special case check
-                var = getattr(init_container, 'recurrent_kernel')
-            else:
-                var = getattr(init_container, key.replace("_initializer", ""))
+    if i == epochs-1:
+        print(torch.sqrt(y_pred) * scipy.stats.norm.ppf(0.025))
 
-            var.assign(initializer(var.shape, var.dtype))
-            #use the initializer
 
-def predict_rolling(data):
-    tf.keras.backend.clear_session()
-    reset_weights(model)
-    X_train, Y_train = univariate_data(data, 0, None, 30, 0)
-    X_test, X_train = X_train[-1], X_train[:-1]
-    Y_test, Y_train = Y_train[-1], Y_train[:-1]
-    train_univariate = tf.data.Dataset.from_tensor_slices((X_train, Y_train))
-    train_univariate = train_univariate.cache().shuffle(10000).batch(64, drop_remainder=True).repeat()
 
-    model.fit(train_univariate, epochs=10, batch_size=64,
-              steps_per_epoch=1e2)
 
-    return np.sqrt(model.predict(np.expand_dims(X_test, axis=0))) * scipy.stats.norm.ppf(0.025)
 
-dataset['var'] = dataset.log_returns.rolling(251).apply(predict_rolling, raw=True)
-dataset.to_csv('./data_garch.csv')
+
+# dataset['var'] = dataset.log_returns.rolling(251).apply(predict_rolling, raw=True)
+# dataset.to_csv('./data_garch.csv')
