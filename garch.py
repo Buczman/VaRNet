@@ -23,9 +23,7 @@ def univariate_data(dataset, start_index, end_index, history_size, target_size):
     for i in range(start_index, end_index):
         variance = np.zeros((history_size, 1))
         indices = range(i-history_size, i)
-        variance[-1, :] = np.var(dataset[indices])
         X_train = np.reshape(dataset[indices], (history_size, 1))
-        X_train = np.concatenate((X_train, variance), axis=1)
         # Reshape data from (history_size,) to (history_size, 1)
         yield X_train, np.array(dataset[i+target_size])
 
@@ -35,7 +33,7 @@ def garch_loss(true, vol):
 
 
 class LSTM(torch.nn.Module):
-    def __init__(self, input_size=2, hidden_layer_size=100, output_size=1):
+    def __init__(self, input_size=1, hidden_layer_size=100, output_size=1):
         super().__init__()
         self.hidden_layer_size = hidden_layer_size
 
@@ -56,13 +54,7 @@ model = LSTM()
 loss_function = garch_loss
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-
-
-
 epochs = 15
-
-
-list_of_outputs = []
 
 for i in range(epochs):
     for seq, labels in univariate_data(dataset2.log_returns.to_numpy(), 0, None, 30, 0):
@@ -70,16 +62,8 @@ for i in range(epochs):
         model.hidden_cell = (torch.zeros(1, 1, model.hidden_layer_size),
                         torch.zeros(1, 1, model.hidden_layer_size))
 
-        if len(list_of_outputs) < history_size:
-            seq[history_size - len(list_of_outputs):history_size, 1] = list_of_outputs
-            X_train = torch.tensor(np.expand_dims(seq, axis=1)).float()
-            y_pred = model(X_train)
-            list_of_outputs.append(y_pred.data.numpy()[0])
-        else:
-            X_train = torch.tensor(np.expand_dims(seq, axis = 1)).float()
-            y_pred = model(X_train)
-            del list_of_outputs[0]
-            list_of_outputs.append(y_pred.data.numpy()[0])
+        X_train = torch.tensor(np.expand_dims(seq, axis=1)).float()
+        y_pred = model(X_train)
         single_loss = loss_function(torch.tensor(labels).float(), y_pred)
         single_loss.backward()
         optimizer.step()
