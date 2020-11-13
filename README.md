@@ -1,4 +1,4 @@
-# CAViaRNet
-Conditional Autoregressive Value-at-Risk by Neural Net
+# VaRNet
+Value-at-Risk by Neural Net
 
 Under development
