@@ -22,9 +22,9 @@ def reset_params(model):
         if hasattr(layer, 'reset_parameters'):
             layer.reset_parameters()
     if isinstance(model, GARCHSkewedTStudent) or isinstance(model, GARCHTStudent):
-        model.df.data = torch.tensor(2.05)
+        model.df.data = torch.tensor(2.05, device=model.device)
     if isinstance(model, GARCHSkewedTStudent):
-        model.skewness.data = torch.tensor(0.)
+        model.skewness.data = torch.tensor(0., device=model.device)
 
 
 def predict_rolling(dataset, model, epochs, optimizer, loss_function, param_list, device):
@@ -33,7 +33,7 @@ def predict_rolling(dataset, model, epochs, optimizer, loss_function, param_list
     X_pred = torch.from_numpy(np.reshape(dataset.to_numpy()[-30:], (30, 1)))
     X_train = torch.tensor(np.expand_dims(X_pred, axis=1)).float().to(device)
 
-    params = model(X_train).detach().numpy()
+    params = model(X_train).cpu().detach().numpy()
 
     if isinstance(model, GARCHSkewedTStudent):
         dist = skewstudent.skewstudent.SkewStudent(eta=params[1], lam=params[2])
@@ -109,7 +109,7 @@ def train(model, optimizer, loss_fn, dataset, epochs=20, device='cuda', verbose=
             loss.backward()
             optimizer.step()
 
-            train_loss += loss.data.item() * x.size(0)
+            train_loss += loss.data.item()
 
             with torch.no_grad():
                 if isinstance(model, GARCHSkewedTStudent) or isinstance(model, GARCHTStudent):
