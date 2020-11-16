@@ -1,12 +1,19 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 
-data = pd.read_csv(r'results/data_caviar.csv')
-data = data.iloc[-250:]
+data = pd.read_csv(r'results/data_garch_sst.csv')
+data = data.iloc[-250:][['Data', 'log_returns', 'var']]
 
-plt.plot(pd.to_datetime(data.Data), data.log_returns)
-plt.plot(pd.to_datetime(data.Data), data['var'])
-plt.ylim(-0.1, 0.1)
+caviar = pd.read_csv(r'results/data_caviar.csv')
+caviar = caviar.iloc[-250:][['var']].rename(columns={'var':'caviar'})
+
+data_combined = pd.concat((data, caviar), axis=1)
+
+plt.plot(pd.to_datetime(data_combined.Data), data_combined.log_returns, label='returns')
+plt.plot(pd.to_datetime(data_combined.Data), data_combined['var'], label='GARCH-SST VaR')
+plt.plot(pd.to_datetime(data_combined.Data), data_combined['caviar'], label='CAViaR VaR')
+plt.ylim(-0.075, 0.075)
+plt.legend()
 plt.show()
 
-print(sum(data.log_returns < data['var']))
+print(sum(data_combined.log_returns < data_combined['var']))
