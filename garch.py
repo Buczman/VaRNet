@@ -18,7 +18,7 @@ data = pd.read_csv('./data/wig.csv').set_index('Data')
 data['log_returns'] = data['Zamkniecie'].rolling(2).apply(lambda x: np.log(x[1] / x[0]), raw=True)
 
 dataset = data.loc[(data.index > '2005-01-01')]
-dataset = dataset.iloc[1:(TRAINING_SAMPLE + TESTING_SAMPLE + 1)]
+dataset = dataset.iloc[:(TRAINING_SAMPLE + TESTING_SAMPLE)]
 
 model = GARCHSkewedTStudent(device=device)
 loss_function = hansen_garch_skewed_student_loss

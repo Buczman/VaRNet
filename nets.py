@@ -17,6 +17,8 @@ class CAViaR(torch.nn.Module):
         self.hidden_cell = (torch.zeros(1, 1, self.hidden_layer_size),
                             torch.zeros(1, 1, self.hidden_layer_size))
 
+        self.to(self.device)
+
     def forward(self, input_seq):
         self.hidden_cell = (torch.zeros(1, 1, self.hidden_layer_size).to(self.device),
                             torch.zeros(1, 1, self.hidden_layer_size).to(self.device))

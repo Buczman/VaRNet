@@ -6,19 +6,18 @@ from nets import CAViaR
 from utils import predict_rolling
 
 
-TRAINING_SAMPLE = 250
+TRAINING_SAMPLE = 1000
 TESTING_SAMPLE = 250
 MEMORY_SIZE = 30
 EPOCHS_PER_STEP = 45
 
-# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device = torch.device('cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 data = pd.read_csv('./data/wig.csv').set_index('Data')
 data['log_returns'] = data['Zamkniecie'].rolling(2).apply(lambda x: np.log(x[1] / x[0]), raw=True)
 
 dataset = data.loc[(data.index > '2005-01-01')]
-dataset = dataset.iloc[1:(TRAINING_SAMPLE + TESTING_SAMPLE + 1)]
+dataset = dataset.iloc[:(TRAINING_SAMPLE + TESTING_SAMPLE)]
 
 model = CAViaR(device=device)
 loss_function = caviar_loss(0.025)
