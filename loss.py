@@ -4,8 +4,19 @@ import numpy as np
 
 def caviar_loss(pval):
     def caviar_loss_pval(true, var):
-        return -1*(float(true < var) - pval) * (true - var)
+        return (pval - float(true < var)) * (true - var)
     return caviar_loss_pval
+
+def caviar_loss_2(true, var):
+    return (0.025 - float(true < var)) * huber_loss(true - var)
+
+
+def huber_loss(x, eps=0.1):
+    if torch.abs(x) <= eps:
+        return torch.square(x)/eps * torch.sign(x)
+    else:
+        return torch.abs(x) - 1/2*eps * torch.sign(x)
+
 
 
 def garch_normal_loss(true, vol):
