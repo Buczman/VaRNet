@@ -7,7 +7,7 @@ from utils import predict_rolling
 
 
 TRAINING_SAMPLE = 1000
-TESTING_SAMPLE = 250
+TESTING_SAMPLE = 20
 MEMORY_SIZE = 30
 EPOCHS_PER_STEP = 15
 
