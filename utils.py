@@ -29,6 +29,7 @@ def reset_params(model):
 
 def predict_rolling(dataset, model, epochs, optimizer, loss_function, param_list, device):
     reset_params(model)
+    print('RR: %0.5f' % dataset[-1])
     train(model, optimizer, loss_function, dataset, epochs, device, verbose=True)
     X_pred = torch.from_numpy(np.reshape(dataset.to_numpy()[-30:], (30, 1)))
     X_train = torch.tensor(np.expand_dims(X_pred, axis=1)).float().to(device)
@@ -107,6 +108,9 @@ def train(model, optimizer, loss_fn, dataset, epochs=20, device='cuda', verbose=
             loss = loss_fn(y, yhat)
 
             loss.backward()
+
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), 0.001)
+
             optimizer.step()
 
             train_loss += loss.data.item()
