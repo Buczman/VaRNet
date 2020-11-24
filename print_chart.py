@@ -2,11 +2,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 data = pd.read_csv(r'results/data_caviar.csv')
-data = data.iloc[-250:][['Data', 'log_returns', 'var']]
+data = data.iloc[-250:][['log_returns', 'var']]
 
 caviar = pd.read_csv(r'results/data_benchmark_caviar.csv')
 # caviar = caviar.iloc[-250:][['var']].rename(columns={'var':'caviar'})
-caviar = caviar.iloc[-250:][['caviar']]
+caviar = caviar.iloc[-250:][['caviar', 'Data']]
 
 data_combined = pd.concat((data, caviar), axis=1)
 
