@@ -41,14 +41,13 @@ def reset_params(model):
         model.skewness.data = torch.tensor(0., device=model.device)
 
 
-def predict_rolling(dataset, model, memory, epochs, optimizer, loss_function, param_list, device):
+def predict_rolling(dataset, model, memory, batch_size, epochs, optimizer, loss_function, param_list, device):
     reset_params(model)
     print('RR: %0.5f' % dataset[-1])
-    train(model, optimizer, loss_function, memory, dataset, epochs, device, verbose=True)
-    X_pred = torch.from_numpy(np.reshape(dataset.to_numpy()[-30:], (30, 1)))
-    X_train = torch.tensor(np.expand_dims(X_pred, axis=1)).float().to(device)
+    train(model, optimizer, loss_function, memory, batch_size, dataset, epochs, device, verbose=True)
+    X_pred = torch.from_numpy(np.reshape(dataset.to_numpy()[-memory:], (1, memory))).float().to(device)
 
-    params = model(X_train).cpu().detach().numpy()
+    params = model(X_pred).cpu().detach().numpy()
 
     if isinstance(model, GARCHSkewedTStudent):
         dist = skewstudent.skewstudent.SkewStudent(eta=params[1], lam=params[2])
@@ -71,7 +70,7 @@ def predict_rolling(dataset, model, memory, epochs, optimizer, loss_function, pa
     return var
 
 
-def train(model, optimizer, loss_fn, memory, dataset, epochs=20, device='cuda', verbose=True):
+def train(model, optimizer, loss_fn, memory, batch_size, dataset, epochs=20, device='cuda', verbose=True):
     '''
     Runs training loop for classification problems. Returns Keras-style
     per-epoch history of loss and accuracy over training and validation data.
@@ -111,7 +110,8 @@ def train(model, optimizer, loss_fn, memory, dataset, epochs=20, device='cuda', 
               'num_workers': 1}
 
     timedataset = TimeDataset(dataset, 0, None, memory, 0)
-    training_generator = torch.utils.data.DataLoader(timedataset, batch_size=64, shuffle=True)
+    training_generator = torch.utils.data.DataLoader(timedataset, batch_size=batch_size, shuffle=False,
+                                                     drop_last=model.stateful)
 
     start_time_sec = time.time()
 
@@ -119,6 +119,9 @@ def train(model, optimizer, loss_fn, memory, dataset, epochs=20, device='cuda', 
 
         # --- TRAIN AND EVALUATE ON TRAINING SET -----------------------------
         train_loss = 0.0
+
+        if model.stateful:
+            model.init_hidden(batch_size)
 
         for n, batch in enumerate(training_generator):
             optimizer.zero_grad()

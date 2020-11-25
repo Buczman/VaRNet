@@ -2,19 +2,23 @@ import torch
 import numpy as np
 
 
-def caviar_loss(pval):
-    def caviar_loss_pval(true, var):
-        return -1*(float(true < var) - pval) * (true - var)
-    return caviar_loss_pval
+def caviar_loss(true, var, pval=0.025):
+    return torch.mean(-1*((true < var).float() - pval) * (true - var))
 
-def caviar_loss_2(true, var):
-    return (0.025 - (true < var).float()) * torch.stack([huber_loss((true - var)[i]) for i in range(len(true))])
 
-def huber_loss(x, eps=0.025):
-    if torch.abs(x) <= eps:
-        return torch.square(x) / 2 * torch.sign(x)
-    else:
-        return eps * (torch.abs(x) - 1 / 2 * eps) * torch.sign(x)
+def huber_loss(true, var, pval=0.025, eps=0.025):
+    x = true - var
+
+    def small_huber(x):
+        if x <= (pval-1)*eps:
+            return x*(pval - 1) - 1/2*(pval - 1)**2 * eps
+        elif x <= pval * eps:
+            return x**2/(2*eps)
+        else:
+            return x*pval - 1/2*pval**2 * eps
+
+    return torch.mean(torch.stack([small_huber(_) for _ in x]))
+
 
 
 def garch_normal_loss(true, vol):

@@ -3,7 +3,7 @@ import pandas as pd
 from scipy.optimize import minimize
 
 
-def caviar(data, steps_back=5):
+def caviar(data, steps_back=1):
 
     VaR = np.zeros(len(data))
 
