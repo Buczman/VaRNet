@@ -1,20 +1,39 @@
 import numpy as np
 import torch
+import torch.utils.data
 import skewstudent
 import time
 from scipy.stats import t, norm
 from nets import *
 
 
-def univariate_data(dataset, start_index, end_index, history_size, target_size):
-    start_index = start_index + history_size
-    if end_index is None:
-        end_index = len(dataset) - target_size
+class TimeDataset(torch.utils.data.Dataset):
+    'Characterizes a dataset for PyTorch'
+    def __init__(self, dataset, start_index, end_index, history_size, target_size):
+        'Initialization'
+        self.dataset = dataset
+        self.history_size = history_size
+        self.start_index = start_index + history_size
+        if end_index is None:
+            self.end_index = len(dataset) - target_size
+        else:
+            self.end_index = end_index
+        self.target_size = target_size
 
-    for i in range(start_index, end_index):
-        indices = range(i - history_size, i)
-        X_train = torch.from_numpy(np.expand_dims(np.reshape(dataset[indices], (history_size, 1)), axis=1)).float()
-        yield X_train, torch.from_numpy(np.array(dataset[i + target_size])).float()
+    def __len__(self):
+        'Denotes the total number of samples'
+        return self.end_index - self.start_index
+
+    def __getitem__(self, index):
+        'Generates one sample of data'
+        # Select sample
+        indices = range(index, index + self.history_size)
+
+        # Load data and get label
+        X_train = np.reshape(self.dataset[indices], (self.history_size, 1))
+        y_train = np.array(self.dataset[index + self.history_size + self.target_size])
+
+        return X_train, y_train
 
 
 def reset_params(model):
@@ -27,10 +46,10 @@ def reset_params(model):
         model.skewness.data = torch.tensor(0., device=model.device)
 
 
-def predict_rolling(dataset, model, epochs, optimizer, loss_function, param_list, device):
+def predict_rolling(dataset, model, memory, epochs, optimizer, loss_function, param_list, device):
     reset_params(model)
     print('RR: %0.5f' % dataset[-1])
-    train(model, optimizer, loss_function, dataset, epochs, device, verbose=True)
+    train(model, optimizer, loss_function, memory, dataset, epochs, device, verbose=True)
     X_pred = torch.from_numpy(np.reshape(dataset.to_numpy()[-30:], (30, 1)))
     X_train = torch.tensor(np.expand_dims(X_pred, axis=1)).float().to(device)
 
@@ -57,7 +76,7 @@ def predict_rolling(dataset, model, epochs, optimizer, loss_function, param_list
     return var
 
 
-def train(model, optimizer, loss_fn, dataset, epochs=20, device='cuda', verbose=True):
+def train(model, optimizer, loss_fn, memory, dataset, epochs=20, device='cuda', verbose=True):
     '''
     Runs training loop for classification problems. Returns Keras-style
     per-epoch history of loss and accuracy over training and validation data.
@@ -92,6 +111,13 @@ def train(model, optimizer, loss_fn, dataset, epochs=20, device='cuda', verbose=
     history = {}  # Collects per-epoch loss and acc like Keras' fit().
     history['loss'] = []
 
+    params = {'batch_size': 64,
+              'shuffle': True,
+              'num_workers': 1}
+
+    timedataset = TimeDataset(dataset.to_numpy(), 0, None, memory, 0)
+    training_generator = torch.utils.data.DataLoader(timedataset, **params)
+
     start_time_sec = time.time()
 
     for epoch in range(epochs):
@@ -99,7 +125,9 @@ def train(model, optimizer, loss_fn, dataset, epochs=20, device='cuda', verbose=
         # --- TRAIN AND EVALUATE ON TRAINING SET -----------------------------
         train_loss = 0.0
 
-        for n, batch in enumerate(univariate_data(dataset.to_numpy(), 0, None, 30, 0)):
+
+
+        for batch in training_generator:
             optimizer.zero_grad()
 
             x = batch[0].to(device)

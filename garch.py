@@ -26,13 +26,18 @@ optimizer = torch.optim.Adam([{'params': model.parameters()},
                               {'params': [model.skewness, model.df], 'lr': 1e-2}], lr=3e-4)
 
 param_list = []
-dataset[['var']] = dataset.log_returns.rolling(TESTING_SAMPLE).apply(predict_rolling,
-                                                                     kwargs={'model': model,
-                                                                             'loss_function': loss_function,
-                                                                             'optimizer': optimizer,
-                                                                             'epochs': EPOCHS_PER_STEP,
-                                                                             'param_list': param_list,
-                                                                             'device': device},
-                                                                     raw=False).shift(periods=1)
+dataset[['var']] = dataset.log_returns.rolling(
+    TRAINING_SAMPLE).apply(
+    predict_rolling,
+    kwargs={'model': model,
+            'memory': MEMORY_SIZE,
+            'loss_function': loss_function,
+            'optimizer': optimizer,
+            'epochs': EPOCHS_PER_STEP,
+            'param_list': param_list,
+            'device': device},
+    raw=False).shift(
+    periods=1
+)
 pd.DataFrame(param_list).to_csv('results/data_garch_sst_params.csv')
 dataset.to_csv('results/data_garch_sst.csv')
