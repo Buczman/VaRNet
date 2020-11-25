@@ -9,15 +9,17 @@ from nets import *
 
 class TimeDataset(torch.utils.data.Dataset):
     'Characterizes a dataset for PyTorch'
+
     def __init__(self, dataset, start_index, end_index, history_size, target_size):
         'Initialization'
-        self.dataset = dataset
-        self.history_size = history_size
+        self.dataset = dataset.values
+
         self.start_index = start_index + history_size
         if end_index is None:
             self.end_index = len(dataset) - target_size
         else:
             self.end_index = end_index
+        self.history_size = history_size
         self.target_size = target_size
 
     def __len__(self):
@@ -26,14 +28,7 @@ class TimeDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         'Generates one sample of data'
-        # Select sample
-        indices = range(index, index + self.history_size)
-
-        # Load data and get label
-        X_train = np.reshape(self.dataset[indices], (self.history_size, 1))
-        y_train = np.array(self.dataset[index + self.history_size + self.target_size])
-
-        return X_train, y_train
+        return self.dataset[index:index + self.history_size], self.dataset[index + self.history_size + self.target_size]
 
 
 def reset_params(model):
@@ -58,15 +53,15 @@ def predict_rolling(dataset, model, memory, epochs, optimizer, loss_function, pa
     if isinstance(model, GARCHSkewedTStudent):
         dist = skewstudent.skewstudent.SkewStudent(eta=params[1], lam=params[2])
         param_list.append([params[0], params[1], params[2]])
-        var = np.sqrt(params[0])*dist.ppf(0.025)
+        var = np.sqrt(params[0]) * dist.ppf(0.025)
     elif isinstance(model, GARCHTStudent):
         dist = t(df=params[1])
         param_list.append([params[0], params[1]])
-        var = np.sqrt(params[0])*dist.ppf(0.025)
+        var = np.sqrt(params[0]) * dist.ppf(0.025)
     elif isinstance(model, GARCH):
         dist = norm()
         param_list.append([params])
-        var = np.sqrt(params)*dist.ppf(0.025)
+        var = np.sqrt(params) * dist.ppf(0.025)
     elif isinstance(model, CAViaR):
         param_list.append([params])
         var = params
@@ -115,8 +110,8 @@ def train(model, optimizer, loss_fn, memory, dataset, epochs=20, device='cuda', 
               'shuffle': True,
               'num_workers': 1}
 
-    timedataset = TimeDataset(dataset.to_numpy(), 0, None, memory, 0)
-    training_generator = torch.utils.data.DataLoader(timedataset, **params)
+    timedataset = TimeDataset(dataset, 0, None, memory, 0)
+    training_generator = torch.utils.data.DataLoader(timedataset, batch_size=64, shuffle=True)
 
     start_time_sec = time.time()
 
@@ -125,13 +120,11 @@ def train(model, optimizer, loss_fn, memory, dataset, epochs=20, device='cuda', 
         # --- TRAIN AND EVALUATE ON TRAINING SET -----------------------------
         train_loss = 0.0
 
-
-
-        for batch in training_generator:
+        for n, batch in enumerate(training_generator):
             optimizer.zero_grad()
 
-            x = batch[0].to(device)
-            y = batch[1].to(device)
+            x = batch[0].float().to(device)
+            y = batch[1].float().to(device)
             yhat = model(x)
             loss = loss_fn(y, yhat)
 
@@ -155,7 +148,6 @@ def train(model, optimizer, loss_fn, memory, dataset, epochs=20, device='cuda', 
             print('Epoch %3d /%3d, batches: %d | train loss: %5.5f' % (epoch + 1, epochs, n, train_loss))
 
         history['loss'].append(train_loss)
-
 
     # END OF TRAINING LOOP
 

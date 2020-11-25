@@ -8,7 +8,7 @@ def caviar_loss(pval):
     return caviar_loss_pval
 
 def caviar_loss_2(true, var):
-    return (0.025 - float(true < var)) * huber_loss(true - var)
+    return (0.025 - (true < var).float()) * torch.stack([huber_loss((true - var)[i]) for i in range(len(true))])
 
 def huber_loss(x, eps=0.025):
     if torch.abs(x) <= eps:

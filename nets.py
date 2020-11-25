@@ -10,7 +10,7 @@ class CAViaR(torch.nn.Module):
         self.output_size = 1  # in standard scenario only variance is returned
         self.device = device
 
-        self.lstm = torch.nn.LSTM(input_size, hidden_layer_size1)
+        self.lstm = torch.nn.LSTM(input_size, hidden_layer_size1, batch_first=True)
 
         self.linear1 = torch.nn.Linear(hidden_layer_size1, 64)
         self.linear2 = torch.nn.Linear(64, self.output_size)
@@ -26,11 +26,11 @@ class CAViaR(torch.nn.Module):
         self.hidden_cell = (torch.zeros(1, self.batch_size, self.hidden_layer_size).to(self.device),
                             torch.zeros(1, self.batch_size, self.hidden_layer_size).to(self.device))
 
-        lstm_out, self.hidden_cell = self.lstm(input_seq.view(len(input_seq), self.batch_size, -1), self.hidden_cell)
-        lin_out = self.linear1(lstm_out.view(len(input_seq), self.batch_size, -1))
+        lstm_out, self.hidden_cell = self.lstm(input_seq.view(self.batch_size, input_seq.shape[1], -1), self.hidden_cell)
+        lin_out = self.linear1(lstm_out.view(self.batch_size, input_seq.shape[1], -1))
         lin_out = self.linear2(lin_out)
 
-        return lin_out[-1][0]
+        return lin_out[:, -1, 0]
 
 
 class GARCH(torch.nn.Module):
