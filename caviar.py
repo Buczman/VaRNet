@@ -9,7 +9,7 @@ TRAINING_SAMPLE = 1000
 TESTING_SAMPLE = 20
 MEMORY_SIZE = 10
 EPOCHS_PER_STEP = 15
-BATCH_SIZE = 1
+BATCH_SIZE = 64
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 

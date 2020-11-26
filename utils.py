@@ -45,9 +45,16 @@ def predict_rolling(dataset, model, memory, batch_size, epochs, optimizer, loss_
     reset_params(model)
     print('RR: %0.5f' % dataset[-1])
     train(model, optimizer, loss_function, memory, batch_size, dataset, epochs, device, verbose=True)
-    X_pred = torch.from_numpy(np.reshape(dataset.to_numpy()[-memory:], (1, memory))).float().to(device)
-
-    params = model(X_pred).cpu().detach().numpy()
+    if not model.stateful:
+        X_pred = torch.from_numpy(np.reshape(dataset.to_numpy()[-memory:], (1, memory))).float().to(device)
+        params = model(X_pred).cpu().detach().numpy()
+    else:
+        X_pred = []
+        X_train = dataset.to_numpy()[-(batch_size+memory - 1):]
+        for i in range(batch_size):
+            X_pred.append(torch.tensor(X_train[i:i+memory], dtype=torch.float).to(device))
+        X_pred = torch.stack(X_pred)
+        params = model(X_pred).cpu().detach().numpy()[-1]
 
     if isinstance(model, GARCHSkewedTStudent):
         dist = skewstudent.skewstudent.SkewStudent(eta=params[1], lam=params[2])
@@ -110,7 +117,7 @@ def train(model, optimizer, loss_fn, memory, batch_size, dataset, epochs=20, dev
               'num_workers': 1}
 
     timedataset = TimeDataset(dataset, 0, None, memory, 0)
-    training_generator = torch.utils.data.DataLoader(timedataset, batch_size=batch_size, shuffle=False,
+    training_generator = torch.utils.data.DataLoader(timedataset, batch_size=batch_size, shuffle=not model.stateful,
                                                      drop_last=model.stateful)
 
     start_time_sec = time.time()
