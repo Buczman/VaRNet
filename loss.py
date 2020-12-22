@@ -56,9 +56,9 @@ def garch_skewed_student_loss(true, pred):
 
 def hansen_garch_skewed_student_loss(true, pred):
 
-    vol = pred[0]
-    df = pred[1]
-    skewness = pred[2]
+    vol = pred[:-2]
+    df = pred[-2]
+    skewness = pred[-1]
 
     if torch.abs(skewness) >= 1.0:
         skewness = torch.sign(skewness) * (1.0 - 1e-6)
@@ -79,4 +79,4 @@ def hansen_garch_skewed_student_loss(true, pred):
 
     lls *= -1
 
-    return lls
+    return torch.mean(lls)
