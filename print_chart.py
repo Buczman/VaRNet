@@ -1,10 +1,10 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 
-data = pd.read_csv(r'results/data_caviar.csv')
+data = pd.read_csv(r'results/arx/data_caviar.csv')
 data = data.iloc[-250:][['log_returns', 'var']]
 
-caviar = pd.read_csv(r'results/data_benchmark_caviar.csv')
+caviar = pd.read_csv(r'results/arx/data_benchmark_caviar.csv')
 # caviar = caviar.iloc[-250:][['var']].rename(columns={'var':'caviar'})
 caviar = caviar.iloc[-250:][['caviar', 'Data']]
 
