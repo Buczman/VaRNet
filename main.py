@@ -1,5 +1,6 @@
 from caviar import caviar_prediction
 from garch import garch_prediction
+from garch_benchmark import garch_benchmark
 import torch
 
 
@@ -49,3 +50,4 @@ sample_starts = [
 for sample_start in sample_starts:
     caviar_prediction(sample_start, training_sample, testing_sample, memory_size, epochs_per_step, batch_size, device)
     garch_prediction(sample_start, training_sample, testing_sample, memory_size, epochs_per_step, batch_size, device)
+    garch_benchmark(sample_start, training_sample, testing_sample)
