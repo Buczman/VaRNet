@@ -1,12 +1,11 @@
 from caviar import caviar_prediction
 from garch import garch_prediction
 from garch_benchmark import garch_benchmark
+from caviar_benchmark import caviar_benchmark
 import torch
 
-
 training_sample = 1000
-testing_sample = 250
-memory_size = 30
+testing_sample = 1
 epochs_per_step = 50
 batch_size = 64
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -16,7 +15,19 @@ sample_starts = [
     '2008-01-01',
     '2014-01-01',
     '2016-10-01'
-    ]
+]
+
+indexes = [
+    'wig',
+    'spx',
+    'lse'
+]
+
+memory_sizes = [
+    30,
+    10,
+    5
+]
 
 # 1 (początek poniżej, koniec: 2009-12-31)
 # [1] "2006-01-23 - ger"
@@ -48,6 +59,16 @@ sample_starts = [
 # [1] "2016-10-14 - rus"
 
 for sample_start in sample_starts:
-    caviar_prediction(sample_start, training_sample, testing_sample, memory_size, epochs_per_step, batch_size, device)
-    garch_prediction(sample_start, training_sample, testing_sample, memory_size, epochs_per_step, batch_size, device)
-    garch_benchmark(sample_start, training_sample, testing_sample)
+    for index in indexes:
+        for memory_size in memory_sizes:
+            caviar_prediction(index, sample_start, training_sample, testing_sample, memory_size, epochs_per_step,
+                              batch_size, device, True)
+            caviar_prediction(index, sample_start, training_sample, testing_sample, memory_size, epochs_per_step,
+                              batch_size, device, False)
+            garch_prediction(index, sample_start, training_sample, testing_sample, memory_size, epochs_per_step,
+                             batch_size, device, 'normal')
+            garch_prediction(index, sample_start, training_sample, testing_sample, memory_size, epochs_per_step,
+                             batch_size, device, 'skewstudent')
+            garch_benchmark(index, sample_start, training_sample, testing_sample, memory_size, 'skewstudent')
+            garch_benchmark(index, sample_start, training_sample, testing_sample, memory_size, 'normal')
+        caviar_benchmark(index, sample_start, training_sample, testing_sample, 1)

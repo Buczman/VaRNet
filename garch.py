@@ -1,25 +1,30 @@
 import pandas as pd
 import numpy as np
 import torch
-from loss import hansen_garch_skewed_student_loss
-from nets import GARCHSkewedTStudent
+from loss import hansen_garch_skewed_student_loss, garch_normal_loss
+from nets import GARCHSkewedTStudent, GARCH
 from utils import predict_rolling
 
 
-def garch_prediction(sample_start, training_sample, testing_sample, memory_size, epochs_per_step, batch_size, device):
-    data = pd.read_csv('./data/wig.csv').set_index('Data')
+def garch_prediction(index, sample_start, training_sample, testing_sample, memory_size, epochs_per_step, batch_size, device, dist):
+    data = pd.read_csv('./data/' + index + '.csv').set_index('Data')
     data['log_returns'] = data['Zamkniecie'].rolling(2).apply(lambda x: np.log(x[1] / x[0]), raw=True)
 
     dataset = data.loc[(data.index > sample_start)]
     dataset = dataset.iloc[:(training_sample + testing_sample)]
 
-    model = GARCHSkewedTStudent(device=device)
-    loss_function = hansen_garch_skewed_student_loss
-    optimizer = torch.optim.Adam([{'params': model.parameters()},
-                                  {'params': [model.skewness, model.df], 'lr': 1e-2}], lr=3e-4)
+    if dist == 'skewstudent':
+        model = GARCHSkewedTStudent(device=device)
+        loss_function = hansen_garch_skewed_student_loss
+        optimizer = torch.optim.Adam([{'params': model.parameters()},
+                                      {'params': [model.skewness, model.df], 'lr': 1e-2}], lr=3e-4)
+    else:
+        model = GARCH(device=device)
+        loss_function = garch_normal_loss
+        optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
 
     param_list = []
-    dataset['var'] = dataset.log_returns.rolling(
+    dataset['garch_var'] = dataset.log_returns.rolling(
         training_sample).apply(
         predict_rolling,
         kwargs={'model': model,
@@ -33,8 +38,8 @@ def garch_prediction(sample_start, training_sample, testing_sample, memory_size,
         raw=False).shift(
         periods=1
     )
-    pd.DataFrame(param_list).to_csv('results/' + sample_start + 'data_garch_sst_params.csv')
-    dataset.to_csv('results/' + sample_start + 'data_garch_sst.csv')
+    pd.DataFrame(param_list).to_csv('results/' + sample_start + 'data_garch_params_' + index + '_' + dist + '_' + str(memory_size) + '.csv', index=False)
+    dataset.to_csv('results/' + sample_start + 'data_garch_' + index + '_' + dist + '_' + str(memory_size) + '.csv')
 
 
 if __name__ == "__main__":
@@ -46,4 +51,4 @@ if __name__ == "__main__":
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    garch_prediction(training_sample, testing_sample, memory_size, epochs_per_step, batch_size, device)
+    garch_prediction(training_sample, testing_sample, memory_size, epochs_per_step, batch_size, device, 'skewstudent')
