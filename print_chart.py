@@ -1,21 +1,47 @@
 import matplotlib.pyplot as plt
 import pandas as pd
+import numpy as np
 
-data = pd.read_csv(r'results/arx/data_caviar.csv')
-data = data.iloc[-250:][['log_returns', 'var']]
+start_year = '2005-01-01'
+mem_size = '5'
+index = 'wig'
+training_sample = 250
+testing_sample = 250
 
-caviar = pd.read_csv(r'results/arx/data_benchmark_caviar.csv')
-# caviar = caviar.iloc[-250:][['var']].rename(columns={'var':'caviar'})
-caviar = caviar.iloc[-250:][['caviar', 'Data']]
+data = pd.read_csv('./data/{}.csv'.format(index)).set_index('Data')
+data['log_returns'] = data['Zamkniecie'].rolling(2).apply(lambda x: np.log(x[1] / x[0]), raw=True)
+data = data.loc[(data.index > start_year)]
+data = data.iloc[:(training_sample + testing_sample)]
+data = data.reset_index()
+data = data.iloc[-250:][['Data', 'log_returns']]
 
-data_combined = pd.concat((data, caviar), axis=1)
+files_to_read = {
+    # 'CAViaRNet Huber': 'results/{}data_caviar_{}_True_{}.csv'.format(start_year, index, mem_size),
+    # 'CAViaRNet NoHuber': 'results/{}data_caviar_{}_False_{}.csv'.format(start_year, index, mem_size),
+    # 'CAViaR': 'results/{}data_caviar_bench_{}_.csv'.format(start_year, index, mem_size),
+    # 'GARCH normal': 'results/{}data_garch_bench_{}_normal_{}.csv'.format(start_year, index, mem_size),
+    # 'GARCH skewstudent': 'results/{}data_garch_bench_{}_skewstudent_{}.csv'.format(start_year, index, mem_size),
+    # 'GARCHNet normal': 'results/{}data_garch_{}_normal_{}.csv'.format(start_year, index, mem_size),
+    # 'GARCHNet skewstudent': 'results/{}data_garch_{}_skewstudent_{}.csv'.format(start_year, index, mem_size),
+    'GARCHNet skewstudent': 'results/test_garch_run.csv',
 
-plt.plot(pd.to_datetime(data_combined.Data), data_combined.log_returns, label='returns')
-plt.plot(pd.to_datetime(data_combined.Data), data_combined['var'], label='CAViaR Buczyński')
-plt.plot(pd.to_datetime(data_combined.Data), data_combined['caviar'], label='CAViaR Engle')
+}
+
+labels = list(files_to_read.keys())
+
+for n, file in enumerate(files_to_read.values()):
+    data_tmp = pd.read_csv(file)
+    data_tmp = data_tmp.iloc[-250:].loc[:, ['var' in x for x in data_tmp.columns]]
+    data = data.join(data_tmp, rsuffix='_2')
+
+plt.plot(pd.to_datetime(data.Data), data.log_returns, label='returns')
+for i in range(len(files_to_read)):
+    plt.plot(pd.to_datetime(data.Data), data.iloc[:, i+2], label=labels[i])
+
 plt.ylim(-0.075, 0.075)
 plt.legend()
 plt.show()
 
-print(sum(data_combined.log_returns < data_combined['var']))
-print(sum(data_combined.log_returns < data_combined['caviar']))
+# print(sum(data_combined.log_returns < data_combined['var']))
+# print(sum(data_combined.log_returns < data_combined['caviar']))
+
