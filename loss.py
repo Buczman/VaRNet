@@ -5,21 +5,13 @@ import numpy as np
 def caviar_loss(true, var, pval=0.025):
     return torch.mean(-1*((true < var).float() - pval) * (true - var))
 
-
-def huber_loss(true, var, pval=0.025, eps=0.025):
+def huber_loss(true, var, pval=torch.tensor(0.025), eps=torch.tensor(0.025)):
     x = true - var
-
-    def small_huber(x):
-        if x <= (pval-1)*eps:
-            return x*(pval - 1) - 1/2*(pval - 1)**2 * eps
-        elif x <= pval * eps:
-            return x**2/(2*eps)
-        else:
-            return x*pval - 1/2*pval**2 * eps
-
-    return torch.mean(torch.stack([small_huber(_) for _ in x]))
-
-
+    return torch.mean(torch.cat([
+        x[x <= (pval - 1) * eps] * (pval - 1) - 1 / 2 * (pval - 1) ** 2 * eps,
+        x[(x > (pval - 1) * eps) & (x <= pval * eps)] ** 2 / (2 * eps),
+        x[x > pval * eps] * pval - 1 / 2 * pval ** 2 * eps
+    ]))
 
 def garch_normal_loss(true, vol):
     return 1 / 2 * torch.mean(torch.log(vol) + true ** 2 / vol)  # + tf.math.log(2 * tf.constant(np.pi))
@@ -41,9 +33,6 @@ def hansen_garch_skewed_student_loss(true, pred):
     vol = pred[:-2]
     df = pred[-2]
     skewness = pred[-1]
-
-    if torch.abs(skewness) >= 1.0:
-        skewness = torch.sign(skewness) * (1.0 - 1e-6)
 
     c = torch.lgamma((df + 1)/2) - torch.lgamma(df / 2) - torch.log(np.pi * (df - 2)) / 2
 

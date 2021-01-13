@@ -10,9 +10,9 @@ from torch.optim.lr_scheduler import ExponentialLR
 class TimeDataset(torch.utils.data.Dataset):
     'Characterizes a dataset for PyTorch'
 
-    def __init__(self, dataset, start_index, end_index, history_size, target_size):
+    def __init__(self, dataset, start_index, end_index, history_size, target_size, device='cuda'):
         'Initialization'
-        self.dataset = dataset.values
+        self.dataset = torch.tensor(dataset.values, device=device, dtype=torch.float)
 
         self.start_index = start_index + history_size
         if end_index is None:
@@ -28,7 +28,8 @@ class TimeDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         'Generates one sample of data'
-        return self.dataset[index:index + self.history_size], self.dataset[index + self.history_size + self.target_size]
+        return self.dataset[index:index + self.history_size], \
+               self.dataset[index + self.history_size + self.target_size:index + self.history_size + self.target_size+1]
 
 
 def reset_params(model):
@@ -58,18 +59,18 @@ def predict_rolling(dataset, model, memory, batch_size, epochs, optimizer, loss_
 
     if isinstance(model, GARCHSkewedTStudent):
         dist = skewstudent.skewstudent.SkewStudent(eta=params[1], lam=params[2])
-        param_list.append([params[0], params[1], params[2]])
+        # param_list.append([params[0], params[1], params[2]])
         var = np.sqrt(params[0]) * dist.ppf(0.025)
     elif isinstance(model, GARCHTStudent):
         dist = t(df=params[1])
-        param_list.append([params[0], params[1]])
+        # param_list.append([params[0], params[1]])
         var = np.sqrt(params[0]) * dist.ppf(0.025)
     elif isinstance(model, GARCH):
         dist = norm()
-        param_list.append([params])
+        # param_list.append([params])
         var = np.sqrt(params) * dist.ppf(0.025)
     elif isinstance(model, CAViaR):
-        param_list.append([params])
+        # param_list.append([params])
         var = params
     else:
         var = 0
@@ -109,15 +110,11 @@ def train(model, optimizer, loss_fn, memory, batch_size, dataset, epochs=20, dev
           (dataset.index[-1], type(model).__name__, type(optimizer).__name__,
            optimizer.param_groups[0]['lr'], epochs, device))
 
-    history = {}  # Collects per-epoch loss and acc like Keras' fit().
-    history['loss'] = []
-
     scheduler = ExponentialLR(optimizer=optimizer, gamma=0.99)
 
-    timedataset = TimeDataset(dataset, 0, None, memory, 0)
+    timedataset = TimeDataset(dataset, 0, None, memory, 0, device)
     training_generator = torch.utils.data.DataLoader(timedataset, batch_size=batch_size, shuffle=False,
                                                      drop_last=False)
-
     start_time_sec = time.time()
 
     train_loss = 0.0
@@ -133,18 +130,16 @@ def train(model, optimizer, loss_fn, memory, batch_size, dataset, epochs=20, dev
         for n, batch in enumerate(training_generator):
             optimizer.zero_grad()
 
-            x = batch[0].float().to(device)
-            y = batch[1].view(-1, 1).float().to(device)
+            x = batch[0]
+            y = batch[1]
             yhat = model(x)
             loss = loss_fn(y, yhat)
 
             loss.backward()
 
-            # torch.nn.utils.clip_grad_norm_(model.parameters(), 0.001)
-
             optimizer.step()
 
-            train_loss += loss.data.item()
+            train_loss += loss.data
 
             with torch.no_grad():
                 if isinstance(model, GARCHSkewedTStudent) or isinstance(model, GARCHTStudent):
@@ -156,10 +151,12 @@ def train(model, optimizer, loss_fn, memory, batch_size, dataset, epochs=20, dev
         scheduler.step()
         if verbose:
             print('Epoch %3d /%3d, batches: %d | train loss: %5.5f' % (epoch + 1, epochs, n, train_loss))
+        if isinstance(model, CAViaR):
+            tol = 0.0001
+        else:
+            tol = 0.00001
 
-        history['loss'].append(train_loss)
-
-        if epoch > 1 and np.abs(train_loss / prev_train_loss - 1) < 0.00001:
+        if epoch > 1 and torch.abs(train_loss / prev_train_loss - 1) < tol:
             break
 
 
@@ -172,5 +169,3 @@ def train(model, optimizer, loss_fn, memory, batch_size, dataset, epochs=20, dev
         print()
         print('Time total:     %5.2f sec' % (total_time_sec))
         print('Time per epoch: %5.2f sec' % (time_per_epoch_sec))
-
-    return history

@@ -35,8 +35,8 @@ class CAViaR(torch.nn.Module):
         return lin_out
 
     def init_hidden(self, batch_size):
-        self.hidden_cell = (torch.zeros(1, batch_size, self.hidden_layer_size).to(self.device),
-                            torch.zeros(1, batch_size, self.hidden_layer_size).to(self.device))
+        self.hidden_cell = (torch.zeros(1, batch_size, self.hidden_layer_size, device=self.device),
+                            torch.zeros(1, batch_size, self.hidden_layer_size, device=self.device))
 
 
 class GARCH(torch.nn.Module):
@@ -73,8 +73,8 @@ class GARCH(torch.nn.Module):
         return self.softplus(lin_out)
 
     def init_hidden(self, batch_size):
-        self.hidden_cell = (torch.zeros(1, batch_size, self.hidden_layer_size).to(self.device),
-                            torch.zeros(1, batch_size, self.hidden_layer_size).to(self.device))
+        self.hidden_cell = (torch.zeros(1, batch_size, self.hidden_layer_size, device=self.device),
+                            torch.zeros(1, batch_size, self.hidden_layer_size, device=self.device))
 
 
 class GARCHSkewedTStudent(GARCH):
