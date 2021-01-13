@@ -45,7 +45,8 @@ def reset_params(model):
 def predict_rolling(dataset, model, memory, batch_size, epochs, optimizer, loss_function, param_list, device):
     reset_params(model)
     print('RR: %0.5f' % dataset[-1])
-    train(model, optimizer, loss_function, memory, batch_size, dataset, epochs, device, verbose=True)
+    scheduler = ExponentialLR(optimizer=optimizer, gamma=0.99)
+    train(model, optimizer, scheduler, loss_function, memory, batch_size, dataset, epochs, device, verbose=False)
     if not model.stateful:
         X_pred = torch.from_numpy(np.reshape(dataset.to_numpy()[-memory:], (1, memory))).float().to(device)
         params = model(X_pred).cpu().detach().numpy()
@@ -78,7 +79,7 @@ def predict_rolling(dataset, model, memory, batch_size, epochs, optimizer, loss_
     return var
 
 
-def train(model, optimizer, loss_fn, memory, batch_size, dataset, epochs=20, device='cuda', verbose=True):
+def train(model, optimizer, scheduler, loss_fn, memory, batch_size, dataset, epochs=20, device='cuda', verbose=True):
     '''
     Runs training loop for classification problems. Returns Keras-style
     per-epoch history of loss and accuracy over training and validation data.
@@ -110,14 +111,12 @@ def train(model, optimizer, loss_fn, memory, batch_size, dataset, epochs=20, dev
           (dataset.index[-1], type(model).__name__, type(optimizer).__name__,
            optimizer.param_groups[0]['lr'], epochs, device))
 
-    scheduler = ExponentialLR(optimizer=optimizer, gamma=0.99)
-
     timedataset = TimeDataset(dataset, 0, None, memory, 0, device)
     training_generator = torch.utils.data.DataLoader(timedataset, batch_size=batch_size, shuffle=False,
                                                      drop_last=False)
     start_time_sec = time.time()
 
-    train_loss = 0.0
+    train_loss = torch.tensor(0.0)
 
     for epoch in range(epochs):
         prev_train_loss = train_loss
@@ -147,12 +146,12 @@ def train(model, optimizer, loss_fn, memory, batch_size, dataset, epochs=20, dev
                 if isinstance(model, GARCHSkewedTStudent):
                     model.skewness.data = model.skewness.clamp(-1, +1)
 
-        train_loss = train_loss / n
+        train_loss = train_loss / (n + 1)
         scheduler.step()
         if verbose:
             print('Epoch %3d /%3d, batches: %d | train loss: %5.5f' % (epoch + 1, epochs, n, train_loss))
         if isinstance(model, CAViaR):
-            tol = 0.0001
+            tol = 0.00001
         else:
             tol = 0.00001
 
@@ -165,7 +164,6 @@ def train(model, optimizer, loss_fn, memory, batch_size, dataset, epochs=20, dev
     end_time_sec = time.time()
     total_time_sec = end_time_sec - start_time_sec
     time_per_epoch_sec = total_time_sec / epochs
-    if verbose:
-        print()
-        print('Time total:     %5.2f sec' % (total_time_sec))
-        print('Time per epoch: %5.2f sec' % (time_per_epoch_sec))
+    print()
+    print('Time total:     %5.2f sec' % (total_time_sec))
+    print('Time per epoch: %5.2f sec' % (time_per_epoch_sec))
