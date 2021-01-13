@@ -5,16 +5,16 @@ from caviar_benchmark import caviar_benchmark
 import torch
 
 training_sample = 1000
-testing_sample = 1
-epochs_per_step = 50
-batch_size = 64
+testing_sample = 250
+epochs_per_step = 200
+batch_size = 32
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 sample_starts = [
-    '2006-01-01',
-    '2008-01-01',
-    '2014-01-01',
-    '2016-10-01'
+    '2005-01-01',
+    '2007-01-01',
+    '2013-01-01',
+    '2016-01-01'
 ]
 
 indexes = [

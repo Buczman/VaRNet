@@ -13,12 +13,12 @@ def caviar_prediction(index, sample_start, training_sample, testing_sample, memo
     dataset = data.loc[(data.index > sample_start)]
     dataset = dataset.iloc[:(training_sample + testing_sample)]
 
-    model = CAViaR(device=device, stateful=False)
+    model = CAViaR(device=device, stateful=False, memory_size=memory_size)
     if huber:
         loss_function = huber_loss
     else:
         loss_function = caviar_loss
-    optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
     param_list = []
     dataset['caviar_var'] = dataset.log_returns.rolling(
@@ -38,12 +38,12 @@ def caviar_prediction(index, sample_start, training_sample, testing_sample, memo
 
 
 if __name__ == "__main__":
-    training_sample = 1000
+    training_sample = 250
     testing_sample = 20
     memory_size = 10
-    epochs_per_step = 15
-    batch_size = 64
+    epochs_per_step = 400
+    batch_size = 32
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    caviar_prediction(training_sample, testing_sample, memory_size, epochs_per_step, batch_size, device)
+    caviar_prediction('wig', '2005-01-01', training_sample, testing_sample, memory_size, epochs_per_step, batch_size, device)

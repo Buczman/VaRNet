@@ -4,6 +4,7 @@ import skewstudent
 import time
 from scipy.stats import t, norm
 from nets import *
+from torch.optim.lr_scheduler import ExponentialLR
 
 
 class TimeDataset(torch.utils.data.Dataset):
@@ -111,18 +112,18 @@ def train(model, optimizer, loss_fn, memory, batch_size, dataset, epochs=20, dev
     history = {}  # Collects per-epoch loss and acc like Keras' fit().
     history['loss'] = []
 
-    params = {'batch_size': 64,
-              'shuffle': True,
-              'num_workers': 1}
+    scheduler = ExponentialLR(optimizer=optimizer, gamma=0.99)
 
     timedataset = TimeDataset(dataset, 0, None, memory, 0)
-    training_generator = torch.utils.data.DataLoader(timedataset, batch_size=batch_size, shuffle=not model.stateful,
-                                                     drop_last=model.stateful)
+    training_generator = torch.utils.data.DataLoader(timedataset, batch_size=batch_size, shuffle=False,
+                                                     drop_last=False)
 
     start_time_sec = time.time()
 
-    for epoch in range(epochs):
+    train_loss = 0.0
 
+    for epoch in range(epochs):
+        prev_train_loss = train_loss
         # --- TRAIN AND EVALUATE ON TRAINING SET -----------------------------
         train_loss = 0.0
 
@@ -133,7 +134,7 @@ def train(model, optimizer, loss_fn, memory, batch_size, dataset, epochs=20, dev
             optimizer.zero_grad()
 
             x = batch[0].float().to(device)
-            y = batch[1].float().to(device)
+            y = batch[1].view(-1, 1).float().to(device)
             yhat = model(x)
             loss = loss_fn(y, yhat)
 
@@ -152,11 +153,15 @@ def train(model, optimizer, loss_fn, memory, batch_size, dataset, epochs=20, dev
                     model.skewness.data = model.skewness.clamp(-1, +1)
 
         train_loss = train_loss / n
-
+        scheduler.step()
         if verbose:
             print('Epoch %3d /%3d, batches: %d | train loss: %5.5f' % (epoch + 1, epochs, n, train_loss))
 
         history['loss'].append(train_loss)
+
+        if epoch > 1 and np.abs(train_loss / prev_train_loss - 1) < 0.00001:
+            break
+
 
     # END OF TRAINING LOOP
 

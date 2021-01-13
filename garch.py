@@ -14,12 +14,12 @@ def garch_prediction(index, sample_start, training_sample, testing_sample, memor
     dataset = dataset.iloc[:(training_sample + testing_sample)]
 
     if dist == 'skewstudent':
-        model = GARCHSkewedTStudent(device=device)
+        model = GARCHSkewedTStudent(device=device, memory_size=memory_size)
         loss_function = hansen_garch_skewed_student_loss
         optimizer = torch.optim.Adam([{'params': model.parameters()},
-                                      {'params': [model.skewness, model.df], 'lr': 1e-2}], lr=3e-4)
+                                      {'params': [model.skewness, model.df], 'lr': 1e-3}], lr=1e-4)
     else:
-        model = GARCH(device=device)
+        model = GARCH(device=device, memory_size=memory_size)
         loss_function = garch_normal_loss
         optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
 
@@ -49,9 +49,9 @@ def garch_prediction(index, sample_start, training_sample, testing_sample, memor
 if __name__ == "__main__":
     training_sample = 250
     testing_sample = 250
-    memory_size = 30
-    epochs_per_step = 25
-    batch_size = 1
+    memory_size = 10
+    epochs_per_step = 400
+    batch_size = 64
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 

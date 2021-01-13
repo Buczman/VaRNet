@@ -2,7 +2,7 @@ import torch
 
 
 class CAViaR(torch.nn.Module):
-    def __init__(self, input_size=1, stateful=False, hidden_layer_size1=100, device=torch.device('cuda')):
+    def __init__(self, input_size=1, stateful=False, hidden_layer_size1=100, device=torch.device('cuda'), memory_size=1):
         super().__init__()
         self.hidden_layer_size = hidden_layer_size1
         self.input_size = input_size
@@ -12,7 +12,7 @@ class CAViaR(torch.nn.Module):
 
         self.lstm = torch.nn.LSTM(input_size, hidden_layer_size1, batch_first=True)
 
-        self.linear1 = torch.nn.Linear(hidden_layer_size1, 64)
+        self.linear1 = torch.nn.Linear(hidden_layer_size1*memory_size, 64)
         self.linear2 = torch.nn.Linear(64, self.output_size)
         # self.linear3 = torch.nn.Linear(32, output_size)
         self.hidden_cell = None
@@ -28,10 +28,11 @@ class CAViaR(torch.nn.Module):
             self.hidden_cell = (self.hidden_cell[0].detach(), self.hidden_cell[1].detach())
 
         lstm_out, self.hidden_cell = self.lstm(input_seq.view(batch_size, input_seq.shape[1], -1), self.hidden_cell)
-        lin_out = self.linear1(lstm_out.view(batch_size, input_seq.shape[1], -1))
+        # lin_out = self.linear1(lstm_out[:, -1, :].view(batch_size, 1, -1))
+        lin_out = self.linear1(lstm_out.contiguous().view(batch_size, -1))
         lin_out = self.linear2(lin_out)
 
-        return lin_out[:, -1, 0]
+        return lin_out
 
     def init_hidden(self, batch_size):
         self.hidden_cell = (torch.zeros(1, batch_size, self.hidden_layer_size).to(self.device),
@@ -39,7 +40,7 @@ class CAViaR(torch.nn.Module):
 
 
 class GARCH(torch.nn.Module):
-    def __init__(self, input_size=1, stateful=False, hidden_layer_size1=100, device=torch.device('cuda')):
+    def __init__(self, input_size=1, stateful=False, hidden_layer_size1=100, device=torch.device('cuda'), memory_size=1):
         super().__init__()
         self.hidden_layer_size = hidden_layer_size1
         self.input_size = input_size
@@ -48,7 +49,7 @@ class GARCH(torch.nn.Module):
         self.stateful = stateful
         self.lstm = torch.nn.LSTM(input_size, hidden_layer_size1, batch_first=True)
 
-        self.linear1 = torch.nn.Linear(hidden_layer_size1, 64)
+        self.linear1 = torch.nn.Linear(hidden_layer_size1*memory_size, 64)
         self.linear2 = torch.nn.Linear(64, self.output_size)
         # self.linear3 = torch.nn.Linear(32, output_size)
 
@@ -66,10 +67,10 @@ class GARCH(torch.nn.Module):
             self.hidden_cell = (self.hidden_cell[0].detach(), self.hidden_cell[1].detach())
 
         lstm_out, self.hidden_cell = self.lstm(input_seq.view(batch_size, input_seq.shape[1], -1), self.hidden_cell)
-        lin_out = self.linear1(lstm_out.view(batch_size, input_seq.shape[1], -1))
+        lin_out = self.linear1(lstm_out.contiguous().view(batch_size, -1))
         lin_out = self.linear2(lin_out)
 
-        return self.softplus(lin_out[:, -1, 0])
+        return self.softplus(lin_out)
 
     def init_hidden(self, batch_size):
         self.hidden_cell = (torch.zeros(1, batch_size, self.hidden_layer_size).to(self.device),
@@ -78,8 +79,8 @@ class GARCH(torch.nn.Module):
 
 class GARCHSkewedTStudent(GARCH):
 
-    def __init__(self, input_size=1, stateful=False, hidden_layer_size1=100, device=torch.device('cuda')):
-        super().__init__(input_size, stateful, hidden_layer_size1, device)
+    def __init__(self, input_size=1, stateful=False, hidden_layer_size1=100, device=torch.device('cuda'), memory_size=1):
+        super().__init__(input_size, stateful, hidden_layer_size1, device, memory_size)
         self.skewness = torch.autograd.Variable(torch.tensor(0., device=self.device), requires_grad=True)
         self.df = torch.autograd.Variable(torch.tensor(2.05, device=self.device), requires_grad=True)
 
@@ -92,20 +93,20 @@ class GARCHSkewedTStudent(GARCH):
             self.hidden_cell = (self.hidden_cell[0].detach(), self.hidden_cell[1].detach())
 
         lstm_out, self.hidden_cell = self.lstm(input_seq.view(batch_size, input_seq.shape[1], -1), self.hidden_cell)
-        lin_out = self.linear1(lstm_out.view(batch_size, input_seq.shape[1], -1))
+        lin_out = self.linear1(lstm_out.contiguous().view(batch_size, -1))
         lin_out = self.linear2(lin_out)
 
         return torch.cat([
-            self.softplus(lin_out[:, -1, 0]),
-            self.df.unsqueeze(0),
-            self.skewness.unsqueeze(0)
+            self.softplus(lin_out),
+            self.df.unsqueeze(0).unsqueeze(0),
+            self.skewness.unsqueeze(0).unsqueeze(0)
         ])
 
 
 class GARCHTStudent(GARCH):
 
-    def __init__(self, input_size=1, stateful=False, hidden_layer_size1=100, device=torch.device('cuda')):
-        super().__init__(input_size, stateful, hidden_layer_size1, device)
+    def __init__(self, input_size=1, stateful=False, hidden_layer_size1=100, device=torch.device('cuda'), memory_size=1):
+        super().__init__(input_size, stateful, hidden_layer_size1, device, memory_size)
         self.df = torch.autograd.Variable(torch.tensor(2.05), requires_grad=True, device=self.device)
 
     def forward(self, input_seq):
@@ -117,10 +118,10 @@ class GARCHTStudent(GARCH):
             self.hidden_cell = (self.hidden_cell[0].detach(), self.hidden_cell[1].detach())
 
         lstm_out, self.hidden_cell = self.lstm(input_seq.view(batch_size, input_seq.shape[1], -1), self.hidden_cell)
-        lin_out = self.linear1(lstm_out.view(batch_size, input_seq.shape[1], -1))
+        lin_out = self.linear1(lstm_out.contiguous().view(batch_size, -1))
         lin_out = self.linear2(lin_out)
 
         return torch.cat([
-            self.softplus(lin_out[:, -1, 0]),
-            self.df.unsqueeze(0)
+            self.softplus(lin_out),
+            self.df.unsqueeze(0).unsqueeze(0)
         ])
