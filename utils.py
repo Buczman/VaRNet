@@ -4,6 +4,7 @@ import skewstudent
 import time
 from scipy.stats import t, norm
 from nets import *
+import matplotlib.pyplot as plt
 from torch.optim.lr_scheduler import ExponentialLR
 
 
@@ -61,7 +62,7 @@ def predict_rolling(dataset, model, memory, batch_size, epochs, optimizer, loss_
     if isinstance(model, GARCHSkewedTStudent):
         dist = skewstudent.skewstudent.SkewStudent(eta=params[1], lam=params[2])
         # param_list.append([params[0], params[1], params[2]])
-        var = np.sqrt(params[0]) * dist.ppf(0.025)
+        var = np.sqrt(params[0]/10000) * dist.ppf(0.025)
     elif isinstance(model, GARCHTStudent):
         dist = t(df=params[1])
         # param_list.append([params[0], params[1]])
@@ -69,7 +70,7 @@ def predict_rolling(dataset, model, memory, batch_size, epochs, optimizer, loss_
     elif isinstance(model, GARCH):
         dist = norm()
         # param_list.append([params])
-        var = np.sqrt(params) * dist.ppf(0.025)
+        var = np.sqrt(params/10000) * dist.ppf(0.025)
     elif isinstance(model, CAViaR):
         # param_list.append([params])
         var = params
@@ -148,6 +149,15 @@ def train(model, optimizer, scheduler, loss_fn, memory, batch_size, dataset, epo
 
         train_loss = train_loss / (n + 1)
         scheduler.step()
+        # test_sigma = []
+        # for i in range(200, 1, -1):
+        #     X_pred = torch.from_numpy(np.reshape(dataset.values[-30 - i:-i], (1, 30))).float().to(device)
+        #     params = model(X_pred).cpu().detach().numpy()
+        #     test_sigma.append(params[0])
+        #     # test_sigma.append(np.sqrt(params[0]) * scaler.inverse_transform(np.array(dist.ppf(0.025)).reshape(-1, 1)))
+        # plt.plot(np.array(test_sigma))
+        # plt.plot(dataset.values[-200:])
+        # plt.show()
         if verbose:
             print('Epoch %3d /%3d, batches: %d | train loss: %5.5f' % (epoch + 1, epochs, n, train_loss))
         if isinstance(model, CAViaR):
@@ -155,8 +165,8 @@ def train(model, optimizer, scheduler, loss_fn, memory, batch_size, dataset, epo
         else:
             tol = 0.00001
 
-        if epoch > 1 and torch.abs(train_loss / prev_train_loss - 1) < tol:
-            break
+        # if epoch > 1 and torch.abs(train_loss / prev_train_loss - 1) < tol:
+        #     break
 
 
     # END OF TRAINING LOOP

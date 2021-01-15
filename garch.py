@@ -11,7 +11,7 @@ def garch_prediction(index, sample_start, training_sample, testing_sample, memor
     data['log_returns'] = data['Zamkniecie'].rolling(2).apply(lambda x: np.log(x[1] / x[0]), raw=True)
 
     dataset = data.loc[(data.index > sample_start)]
-    dataset = dataset.iloc[:(training_sample + testing_sample)]
+    dataset = dataset.iloc[:(training_sample + testing_sample)] * 100
 
     if dist == 'skewstudent':
         model = GARCHSkewedTStudent(device=device, memory_size=memory_size)

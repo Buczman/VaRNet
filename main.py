@@ -5,9 +5,9 @@ from caviar_benchmark import caviar_benchmark
 import torch
 
 training_sample = 1000
-testing_sample = 25
-epochs_per_step = 500
-batch_size = 128
+testing_sample = 250
+epochs_per_step = 200
+batch_size = 64
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 sample_starts = [
