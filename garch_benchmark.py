@@ -1,12 +1,17 @@
 import arch
 import pandas as pd
 import numpy as np
+from sklearn.preprocessing import MinMaxScaler
+
 
 TRAINING_SAMPLE = 1000
 TESTING_SAMPLE = 250
 
 
 def garch_predict_rolling(dataset, testing_sample, steps_back, dist):
+    scaler = MinMaxScaler((-10, 10))
+    scaler.fit(dataset.values.reshape(-1, 1))
+    dataset = scaler.transform(dataset.values.reshape(-1, 1))
     am = arch.arch_model(dataset, mean='Zero', vol='Garch', p=steps_back, o=0, q=steps_back, dist=dist)
     res = am.fit(disp='off', last_obs=testing_sample + 1)
 
@@ -18,7 +23,7 @@ def garch_predict_rolling(dataset, testing_sample, steps_back, dist):
     else:
         q = am.distribution.ppf([0.025])
 
-    value_at_risk = cond_mean.values + np.sqrt(cond_var).values * q
+    value_at_risk = cond_mean.values/scaler.scale_ + np.sqrt(cond_var/scaler.scale_**2).values * q
 
     return value_at_risk[0]
 

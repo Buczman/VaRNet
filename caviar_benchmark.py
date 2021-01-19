@@ -1,15 +1,25 @@
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize, differential_evolution
+from sklearn.preprocessing import MinMaxScaler
+
+
+def strided_app(a, L, S ):  # Window len = L, Stride len/stepsize = S
+    nrows = ((a.size-L)//S)+1
+    n = a.strides[0]
+    return np.lib.stride_tricks.as_strided(a, shape=(nrows,L), strides=(S*n,n))
 
 
 def caviar(data, steps_back=1):
     VaR = np.zeros(len(data))
-
+    scaler = MinMaxScaler((-1, 1))
+    scaler.fit(data.values.reshape(-1, 1))
+    data = scaler.transform(data.values.reshape(-1, 1))
     if len(data > 300 + steps_back - 1):
-        emp_qnt = data.iloc[:300 + steps_back - 1].rolling(300).quantile(quantile=0.025).iloc[-steps_back:].values
+        emp_qnt = np.percentile(strided_app(data[:300 + steps_back - 1, 0], 300, 1), 2.5, axis=-1)[-steps_back:]
     else:
-        emp_qnt = np.repeat(np.quantile(data.values, 0.025), steps_back)
+        emp_qnt = np.repeat(np.quantile(data, 0.025), steps_back)
+    data = data.reshape(-1)
 
     # starting_params = np.random.random((10000, steps_back * 2 + 1))
     #
@@ -26,13 +36,13 @@ def caviar(data, steps_back=1):
     #     best_params[res_.fun] = res_.x
     #
     # params = best_params[sorted(best_params)[0]]
-    params = differential_evolution(loss, args=(steps_back, data.values, emp_qnt, VaR), tol=0.00001,
+    params = differential_evolution(loss, args=(steps_back, data, emp_qnt, VaR), tol=0.000001,
                                     bounds=((-10, 10), (-10, 10)) * steps_back + ((-10, 10),)).x
 
     var = -1 * np.sqrt(params[0] + np.dot(params[1:steps_back + 1], np.square(VaR[- (steps_back + 1):-1])) + np.dot(
-        params[(steps_back + 1):(2 * steps_back + 1)], np.square(data[-(steps_back + 1):-1].values)))
-    print(var)
-    return var
+        params[(steps_back + 1):(2 * steps_back + 1)], np.square(data[-(steps_back + 1):-1])))
+    print(var/scaler.scale_)
+    return var/scaler.scale_
 
 
 def loss(params, steps_back, data, emp_qnt, VaR, pval=0.025):

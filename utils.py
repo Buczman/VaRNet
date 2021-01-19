@@ -5,6 +5,7 @@ import time
 from scipy.stats import t, norm
 from nets import *
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
 from torch.optim.lr_scheduler import ExponentialLR
 
 
@@ -13,7 +14,7 @@ class TimeDataset(torch.utils.data.Dataset):
 
     def __init__(self, dataset, start_index, end_index, history_size, target_size, device='cuda'):
         'Initialization'
-        self.dataset = torch.tensor(dataset.values, device=device, dtype=torch.float)
+        self.dataset = torch.tensor(dataset, device=device, dtype=torch.float32)
 
         self.start_index = start_index + history_size
         if end_index is None:
@@ -43,17 +44,22 @@ def reset_params(model):
         model.skewness.data = torch.tensor(0., device=model.device)
 
 
-def predict_rolling(dataset, model, memory, batch_size, epochs, optimizer, loss_function, param_list, device):
+def predict_rolling(dataset_pd, model, memory, batch_size, epochs, optimizer, loss_function, param_list, device):
     reset_params(model)
-    print('RR: %0.5f' % dataset[-1])
+    print('Date: %s, RR: %0.5f' % (dataset_pd.index[-1], dataset_pd[-1]))
     scheduler = ExponentialLR(optimizer=optimizer, gamma=0.99)
-    train(model, optimizer, scheduler, loss_function, memory, batch_size, dataset, epochs, device, verbose=False)
+    scaler = MinMaxScaler((-10, 10))
+    scaler.fit(dataset_pd.values[:-1].reshape(-1, 1))
+    dataset = scaler.transform(dataset_pd.values.reshape(-1, 1))
+    dataset = dataset.reshape(-1)
+
+    train(model, optimizer, scheduler, loss_function, memory, batch_size, dataset, epochs, device, verbose=False, print_chart=False, scaler=scaler)
     if not model.stateful:
-        X_pred = torch.from_numpy(np.reshape(dataset.to_numpy()[-memory:], (1, memory))).float().to(device)
+        X_pred = torch.from_numpy(np.reshape(dataset[-memory:], (1, memory))).float().to(device)
         params = model(X_pred).cpu().detach().numpy()
     else:
         X_pred = []
-        X_train = dataset.to_numpy()[-(batch_size+memory - 1):]
+        X_train = dataset[-(batch_size+memory - 1):]
         for i in range(batch_size):
             X_pred.append(torch.tensor(X_train[i:i+memory], dtype=torch.float).to(device))
         X_pred = torch.stack(X_pred)
@@ -62,25 +68,25 @@ def predict_rolling(dataset, model, memory, batch_size, epochs, optimizer, loss_
     if isinstance(model, GARCHSkewedTStudent):
         dist = skewstudent.skewstudent.SkewStudent(eta=params[1], lam=params[2])
         # param_list.append([params[0], params[1], params[2]])
-        var = np.sqrt(params[0]/10000) * dist.ppf(0.025)
+        var = np.sqrt(params[0]/scaler.scale_**2) * dist.ppf(0.025)
     elif isinstance(model, GARCHTStudent):
         dist = t(df=params[1])
         # param_list.append([params[0], params[1]])
-        var = np.sqrt(params[0]) * dist.ppf(0.025)
+        var = np.sqrt(params[0]/scaler.scale_**2) * dist.ppf(0.025)
     elif isinstance(model, GARCH):
         dist = norm()
         # param_list.append([params])
-        var = np.sqrt(params/10000) * dist.ppf(0.025)
+        var = np.sqrt(params/scaler.scale_**2) * dist.ppf(0.025)
     elif isinstance(model, CAViaR):
         # param_list.append([params])
-        var = params
+        var = params/scaler.scale_
     else:
         var = 0
     print('VaR: %0.5f' % var)
     return var
 
 
-def train(model, optimizer, scheduler, loss_fn, memory, batch_size, dataset, epochs=20, device='cuda', verbose=True):
+def train(model, optimizer, scheduler, loss_fn, memory, batch_size, dataset, epochs=20, device='cuda', verbose=True, print_chart=False, scaler=None):
     '''
     Runs training loop for classification problems. Returns Keras-style
     per-epoch history of loss and accuracy over training and validation data.
@@ -108,8 +114,8 @@ def train(model, optimizer, scheduler, loss_fn, memory, batch_size, dataset, epo
         validation accuracy.
     '''
 
-    print('%s : train() called: model=%s, opt=%s(lr=%f), epochs=%d, device=%s\n' % \
-          (dataset.index[-1], type(model).__name__, type(optimizer).__name__,
+    print('train() called: model=%s, opt=%s(lr=%f), epochs=%d, device=%s\n' % \
+          (type(model).__name__, type(optimizer).__name__,
            optimizer.param_groups[0]['lr'], epochs, device))
 
     timedataset = TimeDataset(dataset, 0, None, memory, 0, device)
@@ -149,15 +155,15 @@ def train(model, optimizer, scheduler, loss_fn, memory, batch_size, dataset, epo
 
         train_loss = train_loss / (n + 1)
         scheduler.step()
-        # test_sigma = []
-        # for i in range(200, 1, -1):
-        #     X_pred = torch.from_numpy(np.reshape(dataset.values[-30 - i:-i], (1, 30))).float().to(device)
-        #     params = model(X_pred).cpu().detach().numpy()
-        #     test_sigma.append(params[0])
-        #     # test_sigma.append(np.sqrt(params[0]) * scaler.inverse_transform(np.array(dist.ppf(0.025)).reshape(-1, 1)))
-        # plt.plot(np.array(test_sigma))
-        # plt.plot(dataset.values[-200:])
-        # plt.show()
+        if print_chart and epoch % 30 == 0:
+            test_sigma = []
+            for i in range(len(timedataset), 1, -1):
+                X_pred = torch.from_numpy(np.reshape(dataset[-memory - i:-i], (1, memory))).float().to(device)
+                params = model(X_pred).cpu().detach().numpy()
+                test_sigma.append(np.sqrt(params[0]/scaler.scale_**2)*norm.ppf(0.025))
+            plt.plot(np.array(test_sigma))
+            plt.plot(dataset[-len(timedataset):]/scaler.scale_)
+            plt.show()
         if verbose:
             print('Epoch %3d /%3d, batches: %d | train loss: %5.5f' % (epoch + 1, epochs, n, train_loss))
         if isinstance(model, CAViaR):
