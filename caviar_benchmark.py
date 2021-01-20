@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize, differential_evolution
 from sklearn.preprocessing import MinMaxScaler
+from numba import jit, float32, int8
 
 
 def strided_app(a, L, S ):  # Window len = L, Stride len/stepsize = S
@@ -11,52 +12,83 @@ def strided_app(a, L, S ):  # Window len = L, Stride len/stepsize = S
 
 
 def caviar(data, steps_back=1):
-    VaR = np.zeros(len(data))
     scaler = MinMaxScaler((-1, 1))
     scaler.fit(data.values.reshape(-1, 1))
     data = scaler.transform(data.values.reshape(-1, 1))
+    data = data.reshape(-1).astype(np.float32)
+    # data = data.values.astype(np.float32)
     if len(data > 300 + steps_back - 1):
-        emp_qnt = np.percentile(strided_app(data[:300 + steps_back - 1, 0], 300, 1), 2.5, axis=-1)[-steps_back:]
+        emp_qnt = np.percentile(strided_app(data[:300 + steps_back - 1], 300, 1), 2.5, axis=-1)[-steps_back:]
     else:
         emp_qnt = np.repeat(np.quantile(data, 0.025), steps_back)
-    data = data.reshape(-1)
+    emp_qnt = emp_qnt.astype(np.float32)
 
-    # starting_params = np.random.random((10000, steps_back * 2 + 1))
+    # starting_params = np.random.random((10000, steps_back * 2 + 1)).astype(np.float32)
     #
     # res = {}
     # for params in starting_params:
-    #     res[loss(params, steps_back, data.values, emp_qnt, np.zeros(len(data)))] = params
+    #     res[loss_numba(params, steps_back, data, emp_qnt)] = params
     #
     # best_res = {x: y for x, y in res.items() if x in sorted(res)[:10]}
     # best_params = {}
     # for params in best_res.values():
-    #     res_ = minimize(loss, params, args=(steps_back, data.values, emp_qnt, VaR), method='Nelder-Mead')
-    #     res_ = minimize(loss, res_.x, args=(steps_back, data.values, emp_qnt, VaR), method='L-BFGS-B',
-    #              bounds=((0, None), (0, None)) * steps_back + ((0, None),))
+    #     res_ = minimize(loss_numba, params, args=(steps_back, data, emp_qnt), method='Nelder-Mead')
+    #     res_ = minimize(loss_numba, res_.x, args=(steps_back, data, emp_qnt), method='L-BFGS-B',
+    #              bounds=((-10, 10), (-10, 10)) * steps_back + ((-10, 10),))
     #     best_params[res_.fun] = res_.x
     #
     # params = best_params[sorted(best_params)[0]]
-    params = differential_evolution(loss, args=(steps_back, data, emp_qnt, VaR), tol=0.000001,
+
+    params = differential_evolution(loss_numba, args=(steps_back, data, emp_qnt), tol=0.000001,
                                     bounds=((-10, 10), (-10, 10)) * steps_back + ((-10, 10),)).x
 
-    var = -1 * np.sqrt(params[0] + np.dot(params[1:steps_back + 1], np.square(VaR[- (steps_back + 1):-1])) + np.dot(
-        params[(steps_back + 1):(2 * steps_back + 1)], np.square(data[-(steps_back + 1):-1])))
+    VaR = VaR_numba(params, steps_back, data, emp_qnt)
+    var = -1 * np.sqrt(params[0] + params[1] * np.square(VaR[-1]) + params[2] * np.square(data[-1]))
     print(var/scaler.scale_)
     return var/scaler.scale_
 
 
-def loss(params, steps_back, data, emp_qnt, VaR, pval=0.025):
-    VaR[:steps_back] = emp_qnt
+@jit(nopython=False, nogil=True)
+def loss_numba(params, steps_back, data, emp_qnt):
+    VaR = np.empty(len(data), dtype=np.float32)
+    VaR[0] = emp_qnt[0]
 
-    for i in range(steps_back + 1, len(data)):
-        to_sqrt = params[0] + np.dot(params[1:steps_back + 1], np.square(VaR[i - (steps_back + 1):i - 1])) + np.dot(
-            params[(steps_back + 1):(2 * steps_back + 1)], np.square(data[i - (steps_back + 1):i - 1]))
+    for i in range(steps_back, len(data)):
+        to_sqrt = params[0] + params[1] * np.square(VaR[i - 1]) + params[2] * np.square(data[i - 1])
         if to_sqrt < 0:
             return 100
         else:
             VaR[i] = -1 * np.sqrt(to_sqrt)
 
-    hit = (data < VaR) - pval
+    hit = ((data < VaR) - 0.025).astype(np.float32)
+    RQ = -1 * hit.dot(data - VaR)
+    return RQ
+
+
+@jit(nopython=False, nogil=True)
+def VaR_numba(params, steps_back, data, emp_qnt):
+    VaR = np.empty(len(data), dtype=np.float32)
+    VaR[0] = emp_qnt[0]
+
+    for i in range(steps_back, len(data)):
+        to_sqrt = params[0] + params[1] * np.square(VaR[i - 1]) + params[2] * np.square(data[i - 1])
+        VaR[i] = -1 * np.sqrt(to_sqrt)
+
+    return VaR
+
+
+def loss(params, steps_back, data, emp_qnt, VaR, pval=0.025):
+    VaR[:steps_back] = emp_qnt
+
+    for i in range(steps_back, len(data)):
+        to_sqrt = params[0] + np.dot(params[1:steps_back + 1], np.square(VaR[i - (steps_back):i])) + np.dot(
+            params[(steps_back + 1):(2 * steps_back + 1)], np.square(data[i - (steps_back):i]))
+        if to_sqrt < 0:
+            return 100
+        else:
+            VaR[i] = -1 * np.sqrt(to_sqrt)
+
+    hit = (data < VaR) - np.array(pval, dtype=np.float32)
     RQ = -1 * np.sum(np.dot(hit, (data - VaR)))
 
     return RQ
