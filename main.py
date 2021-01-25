@@ -5,9 +5,9 @@ from caviar_benchmark import caviar_benchmark
 import torch
 
 training_sample = 1000
-testing_sample = 25
+testing_sample = 250
 epochs_per_step = 300
-batch_size = 64
+batch_size = 32
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 sample_starts = [
@@ -24,9 +24,9 @@ indexes = [
 ]
 
 memory_sizes = [
-    30,
+    # 30,
     # 10,
-    # 5
+    5
 ]
 
 # 1 (początek poniżej, koniec: 2009-12-31)
@@ -60,15 +60,15 @@ memory_sizes = [
 
 for sample_start in sample_starts:
     for index in indexes:
-        # for memory_size in memory_sizes:
+        for memory_size in memory_sizes:
             # caviar_prediction(index, sample_start, training_sample, testing_sample, memory_size, epochs_per_step,
             #                   batch_size, device, True)
-            # caviar_prediction(index, sample_start, training_sample, testing_sample, memory_size, epochs_per_step,
-            #                   batch_size, device, False)
+            caviar_prediction(index, sample_start, training_sample, testing_sample, memory_size, epochs_per_step,
+                              batch_size, device, False)
             # garch_prediction(index, sample_start, training_sample, testing_sample, memory_size, epochs_per_step,
             #                  batch_size, device, 'normal')
             # garch_prediction(index, sample_start, training_sample, testing_sample, memory_size, epochs_per_step,
             #                  batch_size, device, 'skewstudent')
             # garch_benchmark(index, sample_start, training_sample, testing_sample, memory_size, 'skewstudent')
             # garch_benchmark(index, sample_start, training_sample, testing_sample, memory_size, 'normal')
-        caviar_benchmark(index, sample_start, training_sample, testing_sample, 1)
+        # caviar_benchmark(index, sample_start, training_sample, testing_sample, 1)

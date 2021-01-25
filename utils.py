@@ -53,7 +53,7 @@ def predict_rolling(dataset_pd, model, memory, batch_size, epochs, optimizer, lo
     dataset = scaler.transform(dataset_pd.values.reshape(-1, 1))
     dataset = dataset.reshape(-1)
 
-    train(model, optimizer, scheduler, loss_function, memory, batch_size, dataset, epochs, device, verbose=False, print_chart=False, scaler=scaler)
+    train(model, optimizer, scheduler, loss_function, memory, batch_size, dataset, epochs, device, verbose=True, print_chart=False, scaler=scaler)
     if not model.stateful:
         X_pred = torch.from_numpy(np.reshape(dataset[-memory:], (1, memory))).float().to(device)
         params = model(X_pred).cpu().detach().numpy()

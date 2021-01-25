@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 
 start_year = '2005-01-01'
-mem_size = '30'
+mem_size = '5'
 index = 'wig'
 training_sample = 1000
 testing_sample = 250
@@ -17,12 +17,12 @@ data = data.iloc[-testing_sample:][['Data', 'log_returns']]
 
 files_to_read = {
     'CAViaRNet Huber': 'results/{}data_caviar_{}_True_{}.csv'.format(start_year, index, mem_size),
-    'CAViaRNet NoHuber': 'results/{}data_caviar_{}_False_{}.csv'.format(start_year, index, mem_size),
-    'CAViaR': 'results/{}data_caviar_bench_{}_.csv'.format(start_year, index, mem_size),
+    # 'CAViaRNet NoHuber': 'results/{}data_caviar_{}_False_{}.csv'.format(start_year, index, mem_size),
+    # 'CAViaR': 'results/{}data_caviar_bench_{}_.csv'.format(start_year, index, mem_size),
     # 'GARCH normal': 'results/{}data_garch_bench_{}_normal_{}.csv'.format(start_year, index, mem_size),
     # 'GARCH skewstudent': 'results/{}data_garch_bench_{}_skewstudent_{}.csv'.format(start_year, index, mem_size),
-    # 'GARCHNet normal': 'results/{}data_garch_{}_normal_{}.csv'.format(start_year, index, mem_size),
-    # 'GARCHNet skewstudent': 'results/{}data_garch_{}_skewstudent_{}.csv'.format(start_year, index, mem_size),
+    'GARCHNet normal': 'results/{}data_garch_{}_normal_{}.csv'.format(start_year, index, mem_size),
+    'GARCHNet skewstudent': 'results/{}data_garch_{}_skewstudent_{}.csv'.format(start_year, index, mem_size),
     # 'GARCHNet skewstudent': 'results/test_garch_run.csv',
 
 }

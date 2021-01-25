@@ -13,8 +13,8 @@ class CAViaR(torch.nn.Module):
         self.lstm = torch.nn.LSTM(input_size, hidden_layer_size1, batch_first=True)
 
         self.linear1 = torch.nn.Linear(hidden_layer_size1*memory_size, 64)
-        self.linear2 = torch.nn.Linear(64, self.output_size)
-        # self.linear3 = torch.nn.Linear(32, output_size)
+        self.linear2 = torch.nn.Linear(64, 32)
+        self.linear3 = torch.nn.Linear(32, self.output_size)
         self.hidden_cell = None
 
         self.to(self.device)
@@ -31,6 +31,7 @@ class CAViaR(torch.nn.Module):
         # lin_out = self.linear1(lstm_out[:, -1, :].view(batch_size, 1, -1))
         lin_out = self.linear1(lstm_out.contiguous().view(batch_size, -1))
         lin_out = self.linear2(lin_out)
+        lin_out = self.linear3(lin_out)
 
         return lin_out
 
