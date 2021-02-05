@@ -1,4 +1,5 @@
 import torch
+import torch.autograd.profiler as profiler
 
 
 class CAViaR(torch.nn.Module):
@@ -12,11 +13,11 @@ class CAViaR(torch.nn.Module):
 
         self.lstm = torch.nn.LSTM(input_size, hidden_layer_size1, batch_first=True)
 
-        self.linear1 = torch.nn.Linear(hidden_layer_size1*memory_size, 64)
+        self.linear1 = torch.nn.Linear(hidden_layer_size1, 64)
         self.linear2 = torch.nn.Linear(64, 32)
         self.linear3 = torch.nn.Linear(32, self.output_size)
         self.hidden_cell = None
-
+        self.relu = torch.nn.ReLU()
         self.to(self.device)
 
     def forward(self, input_seq):
@@ -28,9 +29,9 @@ class CAViaR(torch.nn.Module):
             self.hidden_cell = (self.hidden_cell[0].detach(), self.hidden_cell[1].detach())
 
         lstm_out, self.hidden_cell = self.lstm(input_seq.view(batch_size, input_seq.shape[1], -1), self.hidden_cell)
-        # lin_out = self.linear1(lstm_out[:, -1, :].view(batch_size, 1, -1))
-        lin_out = self.linear1(lstm_out.contiguous().view(batch_size, -1))
-        lin_out = self.linear2(lin_out)
+        lin_out = self.relu(self.linear1(lstm_out[:, -1, :].view(batch_size, -1)))
+        # lin_out = self.relu(self.linear1(lstm_out.contiguous().view(batch_size, -1)))
+        lin_out = self.relu(self.linear2(lin_out))
         lin_out = self.linear3(lin_out)
 
         return lin_out
@@ -50,12 +51,12 @@ class GARCH(torch.nn.Module):
         self.stateful = stateful
         self.lstm = torch.nn.LSTM(input_size, hidden_layer_size1, batch_first=True)
 
-        self.linear1 = torch.nn.Linear(hidden_layer_size1*memory_size, 64)
+        self.linear1 = torch.nn.Linear(hidden_layer_size1, 64)
         self.linear2 = torch.nn.Linear(64, 32)
         self.linear3 = torch.nn.Linear(32, self.output_size)
 
         self.hidden_cell = None
-
+        self.relu = torch.nn.ReLU()
         self.softplus = torch.nn.Softplus()
         self.to(self.device)
 
@@ -68,8 +69,8 @@ class GARCH(torch.nn.Module):
             self.hidden_cell = (self.hidden_cell[0].detach(), self.hidden_cell[1].detach())
 
         lstm_out, self.hidden_cell = self.lstm(input_seq.view(batch_size, input_seq.shape[1], -1), self.hidden_cell)
-        lin_out = self.linear1(lstm_out.contiguous().view(batch_size, -1))
-        lin_out = self.linear2(lin_out)
+        lin_out = self.relu(self.linear1(lstm_out[:, -1, :].view(batch_size, -1)))
+        lin_out = self.relu(self.linear2(lin_out))
         lin_out = self.linear3(lin_out)
 
 
@@ -96,8 +97,8 @@ class GARCHSkewedTStudent(GARCH):
             self.hidden_cell = (self.hidden_cell[0].detach(), self.hidden_cell[1].detach())
 
         lstm_out, self.hidden_cell = self.lstm(input_seq.view(batch_size, input_seq.shape[1], -1), self.hidden_cell)
-        lin_out = self.linear1(lstm_out.contiguous().view(batch_size, -1))
-        lin_out = self.linear2(lin_out)
+        lin_out = self.relu(self.linear1(lstm_out[:, -1, :].view(batch_size, -1)))
+        lin_out = self.relu(self.linear2(lin_out))
         lin_out = self.linear3(lin_out)
 
         return torch.cat([

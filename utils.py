@@ -5,7 +5,7 @@ import time
 from scipy.stats import t, norm
 from nets import *
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from torch.optim.lr_scheduler import ExponentialLR
 
 
@@ -48,12 +48,14 @@ def predict_rolling(dataset_pd, model, memory, batch_size, epochs, optimizer, lo
     reset_params(model)
     print('Date: %s, RR: %0.5f' % (dataset_pd.index[-1], dataset_pd[-1]))
     scheduler = ExponentialLR(optimizer=optimizer, gamma=0.99)
-    scaler = MinMaxScaler((-10, 10))
+    scaler = StandardScaler()
+    # scaler = MinMaxScaler((-10,10))
     scaler.fit(dataset_pd.values[:-1].reshape(-1, 1))
+
     dataset = scaler.transform(dataset_pd.values.reshape(-1, 1))
     dataset = dataset.reshape(-1)
 
-    train(model, optimizer, scheduler, loss_function, memory, batch_size, dataset, epochs, device, verbose=True, print_chart=False, scaler=scaler)
+    train(model, optimizer, scheduler, loss_function, memory, batch_size, dataset, epochs, device, verbose=True, print_chart=True, scaler=scaler)
     if not model.stateful:
         X_pred = torch.from_numpy(np.reshape(dataset[-memory:], (1, memory))).float().to(device)
         params = model(X_pred).cpu().detach().numpy()
@@ -68,18 +70,21 @@ def predict_rolling(dataset_pd, model, memory, batch_size, epochs, optimizer, lo
     if isinstance(model, GARCHSkewedTStudent):
         dist = skewstudent.skewstudent.SkewStudent(eta=params[1], lam=params[2])
         # param_list.append([params[0], params[1], params[2]])
-        var = np.sqrt(params[0]/scaler.scale_**2) * dist.ppf(0.025)
+        var = np.sqrt(params[0]*scaler.scale_**2) * dist.ppf(0.025)
     elif isinstance(model, GARCHTStudent):
         dist = t(df=params[1])
         # param_list.append([params[0], params[1]])
-        var = np.sqrt(params[0]/scaler.scale_**2) * dist.ppf(0.025)
+        var = np.sqrt(params[0]*scaler.scale_**2) * dist.ppf(0.025)
     elif isinstance(model, GARCH):
         dist = norm()
         # param_list.append([params])
-        var = np.sqrt(params/scaler.scale_**2) * dist.ppf(0.025)
+        var = np.sqrt(params*scaler.scale_**2) * dist.ppf(0.025)
     elif isinstance(model, CAViaR):
         # param_list.append([params])
-        var = params/scaler.scale_
+        var = scaler.inverse_transform(params)
+        with open('test.txt', 'a') as file:
+            file.write(str(var))
+            file.write('\n')
     else:
         var = 0
     print('VaR: %0.5f' % var)
@@ -119,8 +124,12 @@ def train(model, optimizer, scheduler, loss_fn, memory, batch_size, dataset, epo
            optimizer.param_groups[0]['lr'], epochs, device))
 
     timedataset = TimeDataset(dataset, 0, None, memory, 0, device)
-    training_generator = torch.utils.data.DataLoader(timedataset, batch_size=batch_size, shuffle=False,
+    training_generator = torch.utils.data.DataLoader(timedataset, batch_size=batch_size, shuffle=True,
                                                      drop_last=False)
+
+    # valid_dataset_time = TimeDataset(valid_dataset, 0, None, memory, 0, device)
+    # valid_generator = torch.utils.data.DataLoader(valid_dataset_time, batch_size=50-memory, shuffle=True,
+    #                                                  drop_last=False)
     start_time_sec = time.time()
 
     train_loss = torch.tensor(0.0)
@@ -129,7 +138,7 @@ def train(model, optimizer, scheduler, loss_fn, memory, batch_size, dataset, epo
         prev_train_loss = train_loss
         # --- TRAIN AND EVALUATE ON TRAINING SET -----------------------------
         train_loss = 0.0
-
+        valid_loss = 0.0
         if model.stateful:
             model.init_hidden(batch_size)
 
@@ -155,17 +164,40 @@ def train(model, optimizer, scheduler, loss_fn, memory, batch_size, dataset, epo
 
         train_loss = train_loss / (n + 1)
         scheduler.step()
+
+        # with torch.no_grad():
+        #     for n, batch in enumerate(valid_generator):
+        #         x = batch[0]
+        #         y = batch[1]
+        #         yhat = model(x)
+        #         loss = loss_fn(y, yhat)
+        #         valid_loss += loss.data
+        # valid_loss = valid_loss / (n + 1)
+
         if print_chart and epoch % 30 == 0:
-            test_sigma = []
-            for i in range(len(timedataset), 1, -1):
-                X_pred = torch.from_numpy(np.reshape(dataset[-memory - i:-i], (1, memory))).float().to(device)
-                params = model(X_pred).cpu().detach().numpy()
-                test_sigma.append(np.sqrt(params[0]/scaler.scale_**2)*norm.ppf(0.025))
-            plt.plot(np.array(test_sigma))
-            plt.plot(dataset[-len(timedataset):]/scaler.scale_)
-            plt.show()
+            if not isinstance(model, CAViaR):
+                test_sigma = []
+                for i in range(len(timedataset), 1, -1):
+                    X_pred = torch.from_numpy(np.reshape(dataset[-memory - i:-i], (1, memory))).float().to(device)
+                    params = model(X_pred).cpu().detach().numpy()
+                    test_sigma.append(np.sqrt(params[0][0])*norm.ppf(0.025))
+                plt.plot(np.array(test_sigma))
+                plt.plot(dataset[-len(timedataset):])
+                plt.show()
+            else:
+                test_sigma = []
+                for i in range(len(timedataset), 1, -1):
+                    X_pred = torch.from_numpy(np.reshape(dataset[-memory - i:-i], (1, memory))).float().to(device)
+                    params = model(X_pred).cpu().detach().numpy()
+                    # test_sigma.append(params[0]*scaler.scale_ + scaler.mean_)
+                    test_sigma.append(params[0][0])
+                plt.plot(np.array(test_sigma))
+                # plt.plot(dataset[-len(timedataset):]*scaler.scale_ + scaler.mean_)
+                plt.plot(dataset[-len(timedataset):])
+                plt.show()
         if verbose:
             print('Epoch %3d /%3d, batches: %d | train loss: %5.5f' % (epoch + 1, epochs, n, train_loss))
+
         if isinstance(model, CAViaR):
             tol = 0.00001
         else:

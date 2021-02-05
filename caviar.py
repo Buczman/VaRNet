@@ -18,7 +18,7 @@ def caviar_prediction(index, sample_start, training_sample, testing_sample, memo
         loss_function = huber_loss
     else:
         loss_function = caviar_loss
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
     param_list = []
     dataset['caviar_var'] = dataset.log_returns.rolling(

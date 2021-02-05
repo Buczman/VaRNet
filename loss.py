@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 
-def caviar_loss(true, var, pval=0.025):
+def caviar_loss(true, var, pval=0.01):
     return torch.mean(-1*((true < var).float() - pval) * (true - var))
 
 def huber_loss(true, var, pval=torch.tensor(0.025), eps=torch.tensor(0.025)):
