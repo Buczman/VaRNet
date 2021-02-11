@@ -6,18 +6,18 @@ from nets import GARCHSkewedTStudent, GARCH
 from utils import predict_rolling
 
 
-def garch_prediction(index, sample_start, training_sample, testing_sample, memory_size, epochs_per_step, batch_size, device, dist, save_name=''):
+def garch_prediction(index, sample_start, training_sample, testing_sample, in_model_testing_sample,  memory_size, epochs_per_step, batch_size, device, dist, save_name=''):
     data = pd.read_csv('./data/' + index + '.csv').set_index('Data')
     data['log_returns'] = data['Zamkniecie'].rolling(2).apply(lambda x: np.log(x[1] / x[0]), raw=True)
 
     dataset = data.loc[(data.index > sample_start)]
-    dataset = dataset.iloc[:(training_sample + testing_sample)]
+    dataset = dataset.iloc[:(training_sample + testing_sample + in_model_testing_sample)]
 
     if dist == 'skewstudent':
         model = GARCHSkewedTStudent(device=device, memory_size=memory_size)
         loss_function = hansen_garch_skewed_student_loss
         optimizer = torch.optim.Adam([{'params': model.parameters()},
-                                      {'params': [model.skewness, model.df], 'lr': 1e-3}], lr=1e-4)
+                                      {'params': [model.skewness, model.df], 'lr': 1e-3}], lr=3e-4)
     else:
         model = GARCH(device=device, memory_size=memory_size)
         loss_function = garch_normal_loss
@@ -25,9 +25,10 @@ def garch_prediction(index, sample_start, training_sample, testing_sample, memor
 
     param_list = []
     dataset['garch_var'] = dataset.log_returns.rolling(
-        training_sample).apply(
+        training_sample + in_model_testing_sample).apply(
         predict_rolling,
         kwargs={'model': model,
+                'training_size': training_sample,
                 'memory': memory_size,
                 'batch_size': batch_size,
                 'loss_function': loss_function,

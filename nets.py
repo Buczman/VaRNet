@@ -29,9 +29,9 @@ class CAViaR(torch.nn.Module):
             self.hidden_cell = (self.hidden_cell[0].detach(), self.hidden_cell[1].detach())
 
         lstm_out, self.hidden_cell = self.lstm(input_seq.view(batch_size, input_seq.shape[1], -1), self.hidden_cell)
-        lin_out = self.relu(self.linear1(lstm_out[:, -1, :].view(batch_size, -1)))
+        lin_out = self.linear1(lstm_out[:, -1, :].view(batch_size, -1))
         # lin_out = self.relu(self.linear1(lstm_out.contiguous().view(batch_size, -1)))
-        lin_out = self.relu(self.linear2(lin_out))
+        lin_out = self.linear2(lin_out)
         lin_out = self.linear3(lin_out)
 
         return lin_out

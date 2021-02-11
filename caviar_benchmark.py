@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize, differential_evolution
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from numba import jit, float32, int8
 
 
@@ -12,7 +12,7 @@ def strided_app(a, L, S ):  # Window len = L, Stride len/stepsize = S
 
 
 def caviar(data, steps_back=1):
-    scaler = MinMaxScaler((-1, 1))
+    scaler = StandardScaler()
     scaler.fit(data.values.reshape(-1, 1))
     data = scaler.transform(data.values.reshape(-1, 1))
     data = data.reshape(-1).astype(np.float32)
@@ -38,14 +38,17 @@ def caviar(data, steps_back=1):
     #     best_params[res_.fun] = res_.x
     #
     # params = best_params[sorted(best_params)[0]]
+    var = np.nan
+    while np.isnan(var):
+        params = differential_evolution(loss_numba, args=(steps_back, data, emp_qnt), tol=0.000001,
+                                        bounds=((-10, 10), (-10, 10)) * steps_back + ((-10, 10),)).x
 
-    params = differential_evolution(loss_numba, args=(steps_back, data, emp_qnt), tol=0.000001,
-                                    bounds=((-10, 10), (-10, 10)) * steps_back + ((-10, 10),)).x
+        VaR = VaR_numba(params, steps_back, data, emp_qnt)
+        var = -1 * np.sqrt(params[0] + params[1] * np.square(VaR[-1]) + params[2] * np.square(data[-1]))
 
-    VaR = VaR_numba(params, steps_back, data, emp_qnt)
-    var = -1 * np.sqrt(params[0] + params[1] * np.square(VaR[-1]) + params[2] * np.square(data[-1]))
-    print(var/scaler.scale_)
-    return var/scaler.scale_
+
+    print(scaler.inverse_transform(np.array([var])))
+    return scaler.inverse_transform(np.array([var]))[0]
 
 
 @jit(nopython=False, nogil=True)

@@ -44,20 +44,27 @@ def reset_params(model):
         model.skewness.data = torch.tensor(0., device=model.device)
 
 
-def predict_rolling(dataset_pd, model, memory, batch_size, epochs, optimizer, loss_function, param_list, device):
+def predict_rolling(dataset_pd, model, training_size, memory, batch_size, epochs, optimizer, loss_function, param_list, device):
     reset_params(model)
     print('Date: %s, RR: %0.5f' % (dataset_pd.index[-1], dataset_pd[-1]))
-    scheduler = ExponentialLR(optimizer=optimizer, gamma=0.99)
+    scheduler = ExponentialLR(optimizer=optimizer, gamma=0.999)
     scaler = StandardScaler()
     # scaler = MinMaxScaler((-10,10))
     scaler.fit(dataset_pd.values[:-1].reshape(-1, 1))
 
     dataset = scaler.transform(dataset_pd.values.reshape(-1, 1))
     dataset = dataset.reshape(-1)
+    if training_size != dataset.shape[0]:
+        dataset_train = dataset[:training_size]
+        dataset_valid = dataset[training_size:]
+    else:
+        dataset_train = dataset
+        dataset_valid = None
 
-    train(model, optimizer, scheduler, loss_function, memory, batch_size, dataset, epochs, device, verbose=True, print_chart=True, scaler=scaler)
+    train(model, optimizer, scheduler, loss_function, memory, batch_size, dataset_train, dataset_valid, epochs,
+          device, verbose=True, print_chart=False, scaler=scaler)
     if not model.stateful:
-        X_pred = torch.from_numpy(np.reshape(dataset[-memory:], (1, memory))).float().to(device)
+        X_pred = torch.from_numpy(np.reshape(dataset_train[-memory:], (1, memory))).float().to(device)
         params = model(X_pred).cpu().detach().numpy()
     else:
         X_pred = []
@@ -91,7 +98,7 @@ def predict_rolling(dataset_pd, model, memory, batch_size, epochs, optimizer, lo
     return var
 
 
-def train(model, optimizer, scheduler, loss_fn, memory, batch_size, dataset, epochs=20, device='cuda', verbose=True, print_chart=False, scaler=None):
+def train(model, optimizer, scheduler, loss_fn, memory, batch_size, dataset, dataset_valid, epochs=20, device='cuda', verbose=True, print_chart=False, scaler=None):
     '''
     Runs training loop for classification problems. Returns Keras-style
     per-epoch history of loss and accuracy over training and validation data.
@@ -124,12 +131,12 @@ def train(model, optimizer, scheduler, loss_fn, memory, batch_size, dataset, epo
            optimizer.param_groups[0]['lr'], epochs, device))
 
     timedataset = TimeDataset(dataset, 0, None, memory, 0, device)
-    training_generator = torch.utils.data.DataLoader(timedataset, batch_size=batch_size, shuffle=True,
+    training_generator = torch.utils.data.DataLoader(timedataset, batch_size=batch_size, shuffle=False,
                                                      drop_last=False)
-
-    # valid_dataset_time = TimeDataset(valid_dataset, 0, None, memory, 0, device)
-    # valid_generator = torch.utils.data.DataLoader(valid_dataset_time, batch_size=50-memory, shuffle=True,
-    #                                                  drop_last=False)
+    if dataset_valid is not None:
+        valid_dataset_time = TimeDataset(dataset_valid, 0, None, memory, 0, device)
+        valid_generator = torch.utils.data.DataLoader(valid_dataset_time, batch_size=len(dataset_valid)-memory, shuffle=True,
+                                                         drop_last=False)
     start_time_sec = time.time()
 
     train_loss = torch.tensor(0.0)
@@ -162,17 +169,20 @@ def train(model, optimizer, scheduler, loss_fn, memory, batch_size, dataset, epo
                 if isinstance(model, GARCHSkewedTStudent):
                     model.skewness.data = model.skewness.clamp(-1, +1)
 
+            # print('Batch %3d, train loss: %5.5f' % (n + 1, loss.data))
+
         train_loss = train_loss / (n + 1)
         scheduler.step()
 
-        # with torch.no_grad():
-        #     for n, batch in enumerate(valid_generator):
-        #         x = batch[0]
-        #         y = batch[1]
-        #         yhat = model(x)
-        #         loss = loss_fn(y, yhat)
-        #         valid_loss += loss.data
-        # valid_loss = valid_loss / (n + 1)
+        if dataset_valid is not None:
+            with torch.no_grad():
+                for u, batch in enumerate(valid_generator):
+                    x = batch[0]
+                    y = batch[1]
+                    yhat = model(x)
+                    loss = loss_fn(y, yhat)
+                    valid_loss += loss.data
+            valid_loss = valid_loss / (u + 1)
 
         if print_chart and epoch % 30 == 0:
             if not isinstance(model, CAViaR):
@@ -181,22 +191,31 @@ def train(model, optimizer, scheduler, loss_fn, memory, batch_size, dataset, epo
                     X_pred = torch.from_numpy(np.reshape(dataset[-memory - i:-i], (1, memory))).float().to(device)
                     params = model(X_pred).cpu().detach().numpy()
                     test_sigma.append(np.sqrt(params[0][0])*norm.ppf(0.025))
-                plt.plot(np.array(test_sigma))
                 plt.plot(dataset[-len(timedataset):])
+                plt.plot(np.array(test_sigma))
+
                 plt.show()
             else:
                 test_sigma = []
                 for i in range(len(timedataset), 1, -1):
                     X_pred = torch.from_numpy(np.reshape(dataset[-memory - i:-i], (1, memory))).float().to(device)
+                    model.eval()
                     params = model(X_pred).cpu().detach().numpy()
+                    model.train()
                     # test_sigma.append(params[0]*scaler.scale_ + scaler.mean_)
                     test_sigma.append(params[0][0])
+                plt.plot(dataset[-len(timedataset):])
                 plt.plot(np.array(test_sigma))
                 # plt.plot(dataset[-len(timedataset):]*scaler.scale_ + scaler.mean_)
-                plt.plot(dataset[-len(timedataset):])
+
                 plt.show()
         if verbose:
-            print('Epoch %3d /%3d, batches: %d | train loss: %5.5f' % (epoch + 1, epochs, n, train_loss))
+            if dataset_valid is not None:
+                print('Epoch %3d /%3d, batches: %d | train loss: %5.5f | valid loss: %5.5f' % (epoch + 1, epochs, n, train_loss, valid_loss))
+            else:
+                print('Epoch %3d /%3d, batches: %d | train loss: %5.5f' % (
+                epoch + 1, epochs, n, train_loss))
+
 
         if isinstance(model, CAViaR):
             tol = 0.00001
