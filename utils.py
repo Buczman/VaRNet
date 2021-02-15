@@ -5,8 +5,9 @@ import time
 from scipy.stats import t, norm
 from nets import *
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from torch.optim.lr_scheduler import ExponentialLR
+from pytorch_lightning import Trainer
 
 
 class TimeDataset(torch.utils.data.Dataset):
@@ -96,6 +97,35 @@ def predict_rolling(dataset_pd, model, training_size, memory, batch_size, epochs
         var = 0
     print('VaR: %0.5f' % var)
     return var
+
+
+
+def predict_rolling_lightning(dataset_pd, model, training_size, memory, batch_size, epochs, optimizer, loss_function, param_list, device):
+    reset_params(model)
+    scaler = StandardScaler()
+
+    scaler.fit(dataset_pd.values[:-1].reshape(-1, 1))
+    dataset = scaler.transform(dataset_pd.values.reshape(-1, 1))
+    dataset = dataset.reshape(-1)
+
+    timedataset = TimeDataset(dataset, 0, None, memory, 0, device)
+    training_generator = torch.utils.data.DataLoader(timedataset, batch_size=batch_size, shuffle=False,
+                                                     drop_last=False)
+
+    # train(model, optimizer, scheduler, loss_function, memory, batch_size, dataset_train, dataset_valid, epochs,
+    #       device, verbose=True, print_chart=False, scaler=scaler)
+
+
+    trainer = Trainer(gpus=[0])
+    trainer.fit(model, training_generator)
+
+    X_pred = torch.from_numpy(np.reshape(dataset[-memory:], (1, memory))).float().to(device)
+    params = model(X_pred).cpu().detach().numpy()
+
+    var = scaler.inverse_transform(params)
+    print('VaR: %0.5f' % var)
+    return var
+
 
 
 def train(model, optimizer, scheduler, loss_fn, memory, batch_size, dataset, dataset_valid, epochs=20, device='cuda', verbose=True, print_chart=False, scaler=None):
