@@ -15,6 +15,7 @@ def huber_loss(true, var, pval=torch.tensor(0.025), eps=torch.tensor(0.025)):
         x[x > pval * eps] * pval - 1 / 2 * pval ** 2 * eps
     ]))
 
+
 def garch_normal_loss(true, vol):
     return 1 / 2 * torch.mean(torch.log(vol) + true ** 2 / vol)  # + tf.math.log(2 * tf.constant(np.pi))
 
@@ -32,9 +33,10 @@ def student_loss(true, pred):
 
 def hansen_garch_skewed_student_loss(true, pred):
 
-    vol = pred[:-2]
-    df = pred[-2]
-    skewness = pred[-1]
+    vol = pred[:, 0]
+    df = pred[:, 2]
+    skewness = pred[:, 1]
+    true = true[:, 0]
 
     c = torch.lgamma((df + 1)/2) - torch.lgamma(df / 2) - torch.log(np.pi * (df - 2)) / 2
 

@@ -26,7 +26,7 @@ files_to_read = {
     # 'GARCHNet normal': 'results/{}data_garch_{}_normal_{}.csv'.format(start_year, index, mem_size),
     # 'GARCHNet skewstudent': 'results/{}data_garch_{}_skewstudent_{}.csv'.format(start_year, index, mem_size),
     # 'GARCHNet skewstudent': 'results/test_garch_run.csv',
-   "etst": "test.csv"
+   "etst": "test_garch.csv"
 
 }
 
@@ -40,7 +40,7 @@ for n, file in enumerate(files_to_read.values()):
 
 data = data[['Data', 'log_returns', 'VaR']]
 
-data = data.iloc[-(testing_sample + 50):]
+data = data.iloc[-(testing_sample):]
 
 plt.plot(pd.to_datetime(data.Data), data.log_returns, label='returns')
 # for i in range(len(files_to_read)):
