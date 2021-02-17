@@ -36,6 +36,7 @@ def hansen_garch_skewed_student_loss(true, pred):
     vol = pred[:, 0]
     df = pred[:, 2]
     skewness = pred[:, 1]
+    #TODO repair
     true = true[:, 0]
 
     c = torch.lgamma((df + 1)/2) - torch.lgamma(df / 2) - torch.log(np.pi * (df - 2)) / 2

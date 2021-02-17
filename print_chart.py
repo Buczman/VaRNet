@@ -2,8 +2,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
-start_year = '2016-01-01'
-mem_size = '10'
+start_year = '2005-01-01'
+mem_size = '5'
 index = 'wig'
 training_sample = 1000
 testing_sample = 250
@@ -26,7 +26,7 @@ files_to_read = {
     # 'GARCHNet normal': 'results/{}data_garch_{}_normal_{}.csv'.format(start_year, index, mem_size),
     # 'GARCHNet skewstudent': 'results/{}data_garch_{}_skewstudent_{}.csv'.format(start_year, index, mem_size),
     # 'GARCHNet skewstudent': 'results/test_garch_run.csv',
-   "etst": "test_garch.csv"
+    "CAVIAR": 'garch_norm_{}_{}.csv'.format(start_year, mem_size)
 
 }
 
