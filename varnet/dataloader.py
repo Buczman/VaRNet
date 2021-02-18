@@ -39,7 +39,6 @@ class ValueAtRiskDataModule(pl.LightningDataModule):
     def __init__(self, df, training_length=1000, seq_len=1, batch_size=128, num_workers=0):
         super().__init__()
         self.df = df
-        self.test_case = 0
         self.seq_len = seq_len
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -55,11 +54,9 @@ class ValueAtRiskDataModule(pl.LightningDataModule):
     def prepare_data(self):
         pass
 
-    def move_timestep(self):
-        self.test_case += 1
 
-    def setup_train(self):
-        data = self.df.iloc[self.test_case:self.training_length + self.test_case]
+    def setup_train(self, testcase):
+        data = self.df.iloc[testcase:self.training_length + testcase]
 
         X = data[['log_returns']].values[:self.training_length]
         y = data[['log_returns']].shift(-1).values[:self.training_length]
@@ -86,7 +83,7 @@ class ValueAtRiskDataModule(pl.LightningDataModule):
 
         return train_loader
 
-    def gather_prediction(self, prediction):
-        self.df.loc[self.df.index[self.training_length + self.test_case], 'VaR'] = prediction
-        print("Date: {0} -> RR: {1} | VaR: {2}".format(*(self.df.index[self.training_length + self.test_case],) + tuple(
-            self.df.loc[self.df.index[self.training_length + self.test_case], ['log_returns', 'VaR']])))
+    def gather_prediction(self, prediction, testcase):
+        self.df.loc[self.df.index[self.training_length + testcase], 'VaR'] = prediction
+        print("Date: {0} -> RR: {1} | VaR: {2}".format(*(self.df.index[self.training_length + testcase],) + tuple(
+            self.df.loc[self.df.index[self.training_length + testcase], ['log_returns', 'VaR']])))
