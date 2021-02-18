@@ -108,3 +108,6 @@ bin/
 
 # Results
 /results
+
+# Lightning runs
+/runs
