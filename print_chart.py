@@ -2,8 +2,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
-start_year = '2005-01-01'
-mem_size = '10'
+start_year = '2016-01-01'
+mem_size = '5'
 index = 'wig'
 training_sample = 1000
 testing_sample = 250
@@ -18,40 +18,32 @@ data = data[['Data', 'log_returns']]
 
 
 files_to_read = {
-    # 'CAViaRNet Huber': 'results/{}data_caviar_{}_True_{}.csv'.format(start_year, index, mem_size),
-    # 'CAViaRNet NoHuber': 'results/{}data_caviar_{}_False_{}.csv'.format(start_year, index, mem_size),
-    # 'CAViaR': 'results/{}data_caviar_bench_{}_.csv'.format(start_year, index, mem_size),
-    # 'GARCH normal': 'results/done/{}data_garch_bench_{}_normal_{}.csv'.format(start_year, index, mem_size),
-    # 'GARCH skewstudent': 'results/{}data_garch_bench_{}_skewstudent_{}.csv'.format(start_year, index, mem_size),
-    # 'GARCHNet normal': 'results/{}data_garch_{}_normal_{}.csv'.format(start_year, index, mem_size),
-    # 'GARCHNet skewstudent': 'results/{}data_garch_{}_skewstudent_{}.csv'.format(start_year, index, mem_size),
-    # 'GARCHNet skewstudent': 'results/test_garch_run.csv',
-    "CAVIAR": 'caviar_huber_{}_{}.csv'.format(start_year, mem_size)
-
+    # 'CAViaRNet Huber': 'results/caviar_huber_{}_{}.csv'.format(start_year, mem_size),
+    # 'CAViaR': 'results/caviar_bench_{}_1.csv'.format(start_year),
+    'GARCH normal': 'results/garch_bench_normal_{}_{}.csv'.format(start_year, mem_size),
+    'GARCH skewstudent': 'results/garch_bench_skewstudent_{}_{}.csv'.format(start_year, mem_size),
+    # 'GARCHNet normal': 'results/garch_norm_{}_{}.csv'.format(start_year, mem_size),
+    # 'GARCHNet skewstudent': 'results/garch_skew_{}_{}.csv'.format(start_year, mem_size),
 }
 
 labels = list(files_to_read.keys())
 
-for n, file in enumerate(files_to_read.values()):
-    data_tmp = pd.read_csv(file)
-    # data_tmp = data_tmp.iloc[-testing_sample:].loc[:, ['var' in x for x in data_tmp.columns]]
+for n, name in enumerate(files_to_read.keys()):
+    data_tmp = pd.read_csv(files_to_read[name])
+    data_tmp = data_tmp.loc[(data_tmp['Data'] > start_year)].iloc[:(training_sample + testing_sample)].reset_index()
+    data_tmp = data_tmp.loc[:, ['VaR' in x for x in data_tmp.columns]]
+    data_tmp.columns = [name]
 
     data = data.join(data_tmp, rsuffix='_2')
-
-data = data[['Data', 'log_returns', 'VaR']]
 
 data = data.iloc[-(testing_sample):]
 
 plt.plot(pd.to_datetime(data.Data), data.log_returns, label='returns')
-# for i in range(len(files_to_read)):
-#     plt.plot(pd.to_datetime(data.Data), data.iloc[:, i+2], label=labels[i])
-#     print(str(i), ':', data.loc[data.iloc[:, i+2] > data.iloc[:, 1]].shape[0])
-plt.plot(pd.to_datetime(data.Data), data['VaR'])
+for i in range(len(files_to_read)):
+    plt.plot(pd.to_datetime(data.Data), data.iloc[:, i+2], label=labels[i])
+    print(str(labels[i]), ':', data.loc[data.iloc[:, i+2] > data.iloc[:, 1]].shape[0])
 
 plt.ylim(-0.15, 0.15)
 plt.legend()
 plt.show()
-
-print(sum(data.log_returns < data['VaR']))
-# print(sum(data_combined.log_returns < data_combined['caviar']))
 

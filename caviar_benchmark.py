@@ -103,7 +103,11 @@ def caviar_benchmark(index, sample_start, training_sample, testing_sample, steps
     data['log_returns'] = data['Zamkniecie'].rolling(2).apply(lambda x: np.log(x[1] / x[0]), raw=True)
     dataset = data.loc[(data.index > sample_start)]
     dataset = dataset.iloc[:(training_sample + testing_sample)]
-    dataset['caviar_bench_var'] = dataset.log_returns.rolling(training_sample).apply(caviar, kwargs={
+    dataset['VaR'] = dataset.log_returns.rolling(training_sample).apply(caviar, kwargs={
         'steps_back': steps_back}).shift(1)
-    dataset.to_csv('results/' + sample_start + 'data_caviar_bench_' + index + '_' + '.csv', index=False)
+    dataset.to_csv('results/caviar_bench_' + sample_start + '_1.csv', index=False)
 
+
+if __name__ == "__main__":
+    for start in ["2005-01-01", "2007-01-01", "2013-01-01", "2016-01-01"]:
+        caviar_benchmark("wig", start, 1000, 250, 1)

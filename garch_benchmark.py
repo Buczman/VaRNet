@@ -36,10 +36,15 @@ def garch_benchmark(index, sample_start, training_sample, testing_sample, steps_
     data['log_returns'] = data['Zamkniecie'].rolling(2).apply(lambda x: np.log(x[1] / x[0]), raw=True)
     dataset = data.loc[(data.index > sample_start)]
     dataset = dataset.iloc[:(training_sample + testing_sample)]
-    dataset['garch_bench_var'] = dataset.log_returns.rolling(training_sample + 1).apply(garch_predict_rolling, kwargs={
+    dataset['VaR'] = dataset.log_returns.rolling(training_sample + 1).apply(garch_predict_rolling, kwargs={
         'testing_sample': testing_sample,
         'steps_back': steps_back,
         'dist': dist})
-    dataset.to_csv('results/' + sample_start + 'data_garch_bench_' + index + '_' + dist + '_' + str(steps_back) + '.csv', index=False)
+    dataset.to_csv('results/garch_bench_' + dist + '_' + sample_start + '_' + str(steps_back) + '.csv', index=False)
 
 
+if __name__ == "__main__":
+    for start in ["2005-01-01", "2007-01-01", "2013-01-01", "2016-01-01"]:
+        for steps_back in [100]:
+            for dist in ['normal', 'skewstudent']:
+                garch_benchmark('wig', start, 1000, 250, steps_back, dist)

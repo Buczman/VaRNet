@@ -7,7 +7,7 @@ import skewstudent
 from varnet.dataloader import ValueAtRiskDataModule, TimeseriesDataset
 from varnet.loss import *
 from varnet.nets import VaRNet, SkewedGARCHVaRNet, GARCHVaRNet
-
+import gc
 import matplotlib.pyplot as plt
 
 from torch.multiprocessing import Pool, Process, set_start_method
@@ -77,7 +77,7 @@ def experiment(args):
         num_layers=1,
         dropout=0,
         learning_rate=3e-4,
-        num_train=10
+        num_train=250
     )
 
 
@@ -104,7 +104,7 @@ def experiment(args):
             max_epochs=p['max_epochs'],
             logger=csv_logger,
             gpus=1,
-            progress_bar_refresh_rate=20,
+            progress_bar_refresh_rate=0,
             weights_summary=None
         )
 
@@ -150,20 +150,39 @@ def experiment(args):
         # plt.show()
 
         dm.gather_prediction(dm.preprocessing.inverse_transform(model.predict_var(dm.X_test))[0][0], test_case)
+        del model, trainer, csv_logger
+        junk = gc.collect()
 
-    dm.df[['log_returns', 'VaR']].to_csv('{}_{}_{}.csv'.format(model_name, sample_start, mem_size))
+    dm.df[['log_returns', 'VaR']].to_csv('results/{}_{}_{}.csv'.format(model_name, sample_start, mem_size))
 
 
 if __name__ == "__main__":
-    multi_pool = Pool(processes=6)
-    args = list(
-        itertools.product(
-            *[['caviar_huber', 'garch_norm', 'garch_skew'],
-              ['2005-01-01', '2007-01-01', '2013-01-01', '2016-01-01'],
-              [20]]
-        )
-    )
-    predictions = multi_pool.map(experiment, args)
-    multi_pool.close()
-    multi_pool.join()
+    #
+    # models = [
+    #     # 'caviar_huber',
+    #     # 'garch_norm',
+    #     'garch_skew'
+    # ]
+    # start_dates = [
+    #     # '2005-01-01',
+    #     # '2007-01-01',
+    #     '2013-01-01',
+    #     # '2016-01-01'
+    # ]
+    # lengths = [
+    #     10
+    # ]
+    #
+    # multi_pool = Pool(processes=1)
+    # args = list(
+    #     itertools.product(
+    #         *[models,
+    #           start_dates,
+    #           lengths]
+    #     )
+    # )
+    # predictions = multi_pool.map(experiment, args)
+    # multi_pool.close()
+    # multi_pool.join()
 
+    experiment(['caviar_huber', '2016-01-01', 10])
